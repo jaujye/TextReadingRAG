@@ -1,0 +1,35 @@
+# Development overrides for docker-compose.yml
+# This file is automatically loaded by docker-compose and provides
+# development-specific configurations
+
+version: '3.8'
+
+services:
+  chromadb:
+    ports:
+      - "8000:8000"
+    environment:
+      - CHROMA_LOG_LEVEL=DEBUG
+    volumes:
+      - ./data/chroma_db:/chroma/chroma:rw
+    command: ["chroma", "run", "--host", "0.0.0.0", "--port", "8000", "--log-level", "DEBUG"]
+
+  redis:
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --loglevel debug
+
+  # Development API service (if using Docker for API)
+  api:
+    build:
+      target: development
+    environment:
+      - DEBUG=True
+      - LOG_LEVEL=DEBUG
+      - RELOAD=True
+    volumes:
+      - .:/app:rw
+      - /app/__pycache__
+      - /app/.pytest_cache
+    profiles:
+      - development
