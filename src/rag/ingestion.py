@@ -56,11 +56,11 @@ class DocumentProcessor:
         """Initialize the embedding model."""
         try:
             return OpenAIEmbedding(
-                api_key=self.settings.openai.openai_api_key,
-                model=self.settings.openai.openai_embedding_model,
+                api_key=self.settings.llm.openai_api_key,
+                model=self.settings.llm.openai_embedding_model,
             )
         except Exception as e:
-            if not self.settings.development.mock_embeddings:
+            if not self.settings.app.mock_embeddings:
                 raise DocumentIngestionError(f"Failed to initialize embedding model: {e}")
             logger.warning("Using mock embeddings for development")
             return None
@@ -80,8 +80,8 @@ class DocumentProcessor:
         Returns:
             Configured text splitter
         """
-        chunk_size = chunk_size or self.settings.vector_store.chunk_size
-        chunk_overlap = chunk_overlap or self.settings.vector_store.chunk_overlap
+        chunk_size = chunk_size or self.settings.rag.chunk_size
+        chunk_overlap = chunk_overlap or self.settings.rag.chunk_overlap
 
         return SentenceSplitter(
             chunk_size=chunk_size,
@@ -188,13 +188,13 @@ class DocumentLoader:
                 raise FileProcessingError(f"File not found: {file_path}")
 
             # Extract base metadata
-            metadata = self.processor.extract_document_metadata(
+            metadata = self.loader.processor.extract_document_metadata(
                 str(file_path),
                 additional_metadata,
             )
 
             # Choose loading strategy
-            if use_llamaparse and LLAMA_PARSE_AVAILABLE and self.settings.llama_parse.llama_cloud_api_key:
+            if use_llamaparse and LLAMA_PARSE_AVAILABLE and self.settings.llm.llama_cloud_api_key:
                 documents = self._load_with_llamaparse(file_path, metadata)
             else:
                 documents = self._load_with_simple_reader(file_path, metadata)
@@ -217,7 +217,7 @@ class DocumentLoader:
 
         try:
             parser = LlamaParse(
-                api_key=self.settings.llama_parse.llama_cloud_api_key,
+                api_key=self.settings.llm.llama_cloud_api_key,
                 result_type="markdown",
                 verbose=True,
             )
@@ -289,7 +289,7 @@ class DocumentLoader:
 
             # Get file extensions from settings if not provided
             if file_extensions is None:
-                file_extensions = self.settings.file_upload.allowed_extensions
+                file_extensions = self.settings.app.allowed_extensions
 
             # Find all matching files
             pattern = "**/*" if recursive else "*"
@@ -337,13 +337,12 @@ class DocumentIngestionService:
         """
         self.settings = settings
         self.vector_store = vector_store or ChromaVectorStore(
-            host=settings.chroma.chroma_host,
-            port=settings.chroma.chroma_port,
-            persist_directory=settings.chroma.chroma_persist_directory,
+            host=settings.rag.chroma_host,
+            port=settings.rag.chroma_port,
+            persist_directory=settings.rag.chroma_persist_directory,
             settings=settings,
         )
         self.loader = DocumentLoader(settings)
-        self.processor = DocumentProcessor(settings)
 
     async def ingest_file(
         self,
@@ -390,11 +389,11 @@ class DocumentIngestionService:
             )
 
             # Generate embeddings if not using mock mode
-            if not self.settings.development.mock_embeddings:
+            if not self.settings.app.mock_embeddings:
                 await self._generate_embeddings(nodes)
 
             # Store in vector store
-            collection_name = collection_name or self.settings.chroma.chroma_collection_name
+            collection_name = collection_name or self.settings.rag.chroma_collection_name
             node_ids = self.vector_store.add(nodes, collection_name=collection_name)
 
             end_time = datetime.utcnow()
@@ -442,7 +441,7 @@ class DocumentIngestionService:
         try:
             start_time = datetime.utcnow()
 
-            if parallel and self.settings.performance.enable_async_processing:
+            if parallel and self.settings.app.enable_async_processing:
                 # Process files in parallel
                 tasks = [
                     self.ingest_file(file_path, collection_name, processing_options)
@@ -519,7 +518,7 @@ class DocumentIngestionService:
         """
         try:
             # Create text splitter
-            text_splitter = self.processor.create_text_splitter(chunk_size, chunk_overlap)
+            text_splitter = self.loader.processor.create_text_splitter(chunk_size, chunk_overlap)
 
             # Create ingestion pipeline
             pipeline = IngestionPipeline(
@@ -534,8 +533,8 @@ class DocumentIngestionService:
 
             # Add additional metadata to nodes
             for node in nodes:
-                node.metadata["chunk_size"] = chunk_size or self.settings.vector_store.chunk_size
-                node.metadata["chunk_overlap"] = chunk_overlap or self.settings.vector_store.chunk_overlap
+                node.metadata["chunk_size"] = chunk_size or self.settings.rag.chunk_size
+                node.metadata["chunk_overlap"] = chunk_overlap or self.settings.rag.chunk_overlap
                 node.metadata["node_id"] = node.node_id or str(uuid.uuid4())
 
             logger.info(f"Processed {len(documents)} documents into {len(nodes)} nodes")
@@ -553,20 +552,20 @@ class DocumentIngestionService:
             nodes: List of nodes to generate embeddings for
         """
         try:
-            if self.settings.development.mock_embeddings:
+            if self.settings.app.mock_embeddings:
                 # Generate mock embeddings for development
                 import numpy as np
                 for node in nodes:
-                    node.embedding = np.random.rand(self.settings.vector_store.embedding_dimension).tolist()
+                    node.embedding = np.random.rand(self.settings.rag.embedding_dimension).tolist()
                 return
 
-            embedding_model = self.processor.embedding_model
+            embedding_model = self.loader.processor.embedding_model
             if not embedding_model:
                 logger.warning("No embedding model available, skipping embedding generation")
                 return
 
             # Generate embeddings in batches
-            batch_size = self.settings.performance.batch_size
+            batch_size = self.settings.app.batch_size
             for i in range(0, len(nodes), batch_size):
                 batch = nodes[i:i + batch_size]
                 texts = [node.get_content() for node in batch]
@@ -601,7 +600,7 @@ class DocumentIngestionService:
             Existing document info if found, None otherwise
         """
         try:
-            collection_name = collection_name or self.settings.chroma.chroma_collection_name
+            collection_name = collection_name or self.settings.rag.chroma_collection_name
 
             # Search for documents with the same hash
             results = self.vector_store.search_by_metadata(
@@ -630,7 +629,7 @@ class DocumentIngestionService:
             Ingestion statistics
         """
         try:
-            collection_name = collection_name or self.settings.chroma.chroma_collection_name
+            collection_name = collection_name or self.settings.rag.chroma_collection_name
             return self.vector_store.get_collection_stats(collection_name)
 
         except Exception as e:

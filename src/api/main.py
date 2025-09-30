@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
 
     try:
         # Validate critical configuration
-        if not settings.openai.openai_api_key and not settings.development.mock_llm_responses:
+        if not settings.llm.openai_api_key and not settings.app.mock_llm_responses:
             raise ConfigurationError("OpenAI API key is required")
 
         # Initialize any global resources here
@@ -91,8 +91,8 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.security.cors_origins,
-    allow_credentials=settings.security.cors_allow_credentials,
+    allow_origins=settings.app.cors_origins,
+    allow_credentials=settings.app.cors_allow_credentials,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
@@ -231,32 +231,32 @@ async def detailed_health_check() -> Dict[str, Any]:
 
     # Check OpenAI configuration
     health_status["components"]["openai"] = {
-        "status": "healthy" if settings.openai.openai_api_key or settings.development.mock_llm_responses else "unhealthy",
-        "configured": bool(settings.openai.openai_api_key),
-        "mock_mode": settings.development.mock_llm_responses,
+        "status": "healthy" if settings.llm.openai_api_key or settings.app.mock_llm_responses else "unhealthy",
+        "configured": bool(settings.llm.openai_api_key),
+        "mock_mode": settings.app.mock_llm_responses,
     }
 
     # Check ChromaDB configuration
     health_status["components"]["chromadb"] = {
         "status": "configured",
-        "host": settings.chroma.chroma_host,
-        "port": settings.chroma.chroma_port,
-        "persist_directory": settings.chroma.chroma_persist_directory,
+        "host": settings.rag.chroma_host,
+        "port": settings.rag.chroma_port,
+        "persist_directory": settings.rag.chroma_persist_directory,
     }
 
     # Check cache configuration
     health_status["components"]["cache"] = {
-        "status": "enabled" if settings.cache.enable_cache else "disabled",
-        "enabled": settings.cache.enable_cache,
-        "redis_host": settings.cache.redis_host if settings.cache.enable_cache else None,
+        "status": "enabled" if settings.app.enable_cache else "disabled",
+        "enabled": settings.app.enable_cache,
+        "redis_host": settings.app.redis_host if settings.app.enable_cache else None,
     }
 
     # Check file upload configuration
     health_status["components"]["file_upload"] = {
         "status": "configured",
-        "max_file_size_mb": settings.file_upload.max_file_size,
-        "allowed_extensions": settings.file_upload.allowed_extensions,
-        "upload_dir": settings.file_upload.upload_dir,
+        "max_file_size_mb": settings.app.max_file_size,
+        "allowed_extensions": settings.app.allowed_extensions,
+        "upload_dir": settings.app.upload_dir,
     }
 
     # Overall status based on critical components

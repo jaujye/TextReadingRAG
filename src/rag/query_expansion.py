@@ -40,19 +40,6 @@ class ExpansionMethod(str, Enum):
     LLM = "llm"
     SYNONYM = "synonym"
     HYDE = "hyde"
-    MULTI_QUERY = "multi_query"
-    CONTEXTUAL = "contextual"
-    SEMANTIC = "semantic"
-
-
-class QueryType(str, Enum):
-    """Types of queries for targeted expansion."""
-
-    FACTUAL = "factual"
-    CONCEPTUAL = "conceptual"
-    COMPARISON = "comparison"
-    SUMMARIZATION = "summarization"
-    ANALYSIS = "analysis"
 
 
 class SynonymExpander:
@@ -419,12 +406,12 @@ class QueryExpansionService:
         else:
             try:
                 self.llm = OpenAI(
-                    api_key=settings.openai.openai_api_key,
-                    model=settings.openai.openai_model,
+                    api_key=settings.llm.openai_api_key,
+                    model=settings.llm.openai_model,
                     temperature=0.1,
                 )
             except Exception as e:
-                if not settings.development.mock_llm_responses:
+                if not settings.app.mock_llm_responses:
                     raise QueryExpansionError(f"Failed to initialize LLM: {e}")
                 logger.warning("Using mock LLM responses for development")
                 self.llm = None
@@ -458,14 +445,14 @@ class QueryExpansionService:
             Dictionary of expansion results by method
         """
         try:
-            if not self.settings.query_expansion.enable_query_expansion:
+            if not self.settings.rag.enable_query_expansion:
                 return {"original": [query]}
 
             # Use configured methods if not specified
             if methods is None:
                 methods = [
                     ExpansionMethod(method)
-                    for method in self.settings.query_expansion.query_expansion_methods
+                    for method in self.settings.rag.query_expansion_methods
                 ]
 
             results = {"original": [query]}
@@ -508,7 +495,7 @@ class QueryExpansionService:
             for method_results in results.values():
                 total_expansions.extend(method_results)
 
-            max_total = self.settings.query_expansion.max_expanded_queries
+            max_total = self.settings.rag.max_expanded_queries
             if len(total_expansions) > max_total:
                 # Keep original and best expansions
                 results["truncated"] = True
@@ -573,42 +560,14 @@ class QueryExpansionService:
             context=context,
         )
 
-    def classify_query_type(self, query: str) -> QueryType:
-        """
-        Classify the type of query to optimize expansion strategy.
-
-        Args:
-            query: Query string
-
-        Returns:
-            Query type classification
-        """
-        query_lower = query.lower()
-
-        # Simple keyword-based classification
-        if any(word in query_lower for word in ["what is", "define", "definition", "explain"]):
-            return QueryType.FACTUAL
-
-        if any(word in query_lower for word in ["compare", "difference", "versus", "vs"]):
-            return QueryType.COMPARISON
-
-        if any(word in query_lower for word in ["summarize", "summary", "overview", "main points"]):
-            return QueryType.SUMMARIZATION
-
-        if any(word in query_lower for word in ["analyze", "analysis", "why", "how", "evaluate"]):
-            return QueryType.ANALYSIS
-
-        # Default to conceptual
-        return QueryType.CONCEPTUAL
-
     def get_expansion_stats(self) -> Dict[str, Any]:
         """Get query expansion statistics."""
         return {
-            "enabled": self.settings.query_expansion.enable_query_expansion,
+            "enabled": self.settings.rag.enable_query_expansion,
             "available_methods": [
-                method for method in self.settings.query_expansion.query_expansion_methods
+                method for method in self.settings.rag.query_expansion_methods
             ],
-            "max_expansions": self.settings.query_expansion.max_expanded_queries,
+            "max_expansions": self.settings.rag.max_expanded_queries,
             "llm_available": self.llm is not None,
             "synonym_expander_available": True,
             "hyde_available": self.hyde_expander is not None,

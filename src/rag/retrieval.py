@@ -81,9 +81,9 @@ class DenseRetriever:
         """
         try:
             # Generate query embedding
-            if self.settings.development.mock_embeddings:
+            if self.settings.app.mock_embeddings:
                 import numpy as np
-                query_embedding = np.random.rand(self.settings.vector_store.embedding_dimension).tolist()
+                query_embedding = np.random.rand(self.settings.rag.embedding_dimension).tolist()
             else:
                 query_embedding = self.embedding_model.get_query_embedding(query)
 
@@ -142,7 +142,7 @@ class SparseRetriever:
             try:
                 retriever = BM25Retriever.from_defaults(
                     nodes=nodes,
-                    similarity_top_k=self.settings.hybrid_search.sparse_top_k,
+                    similarity_top_k=self.settings.rag.sparse_top_k,
                 )
                 self._bm25_retrievers[collection_name] = retriever
                 logger.info(f"Created BM25 retriever for collection: {collection_name}")
@@ -370,11 +370,11 @@ class HybridRetrievalService:
         else:
             try:
                 self.embedding_model = OpenAIEmbedding(
-                    api_key=settings.openai.openai_api_key,
-                    model=settings.openai.openai_embedding_model,
+                    api_key=settings.llm.openai_api_key,
+                    model=settings.llm.openai_embedding_model,
                 )
             except Exception as e:
-                if not settings.development.mock_embeddings:
+                if not settings.app.mock_embeddings:
                     raise ConfigurationError(f"Failed to initialize embedding model: {e}")
                 logger.warning("Using mock embeddings for development")
                 self.embedding_model = None
@@ -420,10 +420,10 @@ class HybridRetrievalService:
             start_time = datetime.utcnow()
 
             # Set default parameters
-            top_k = top_k or self.settings.hybrid_search.hybrid_top_k
-            dense_top_k = dense_top_k or self.settings.hybrid_search.dense_top_k
-            sparse_top_k = sparse_top_k or self.settings.hybrid_search.sparse_top_k
-            alpha = alpha if alpha is not None else self.settings.hybrid_search.alpha
+            top_k = top_k or self.settings.rag.hybrid_top_k
+            dense_top_k = dense_top_k or self.settings.rag.dense_top_k
+            sparse_top_k = sparse_top_k or self.settings.rag.sparse_top_k
+            alpha = alpha if alpha is not None else self.settings.rag.alpha
 
             logger.info(f"Starting {mode.value} retrieval for query: {query[:50]}...")
 
@@ -601,9 +601,9 @@ class HybridRetrievalService:
             stats.update({
                 "dense_retriever_available": self.embedding_model is not None,
                 "sparse_retrievers_cached": len(self.sparse_retriever._bm25_retrievers),
-                "default_dense_top_k": self.settings.hybrid_search.dense_top_k,
-                "default_sparse_top_k": self.settings.hybrid_search.sparse_top_k,
-                "default_alpha": self.settings.hybrid_search.alpha,
+                "default_dense_top_k": self.settings.rag.dense_top_k,
+                "default_sparse_top_k": self.settings.rag.sparse_top_k,
+                "default_alpha": self.settings.rag.alpha,
             })
 
             return stats

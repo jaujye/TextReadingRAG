@@ -231,12 +231,12 @@ class LLMReranker:
         elif settings:
             try:
                 self.llm = OpenAI(
-                    api_key=settings.openai.openai_api_key,
-                    model=settings.openai.openai_model,
+                    api_key=settings.llm.openai_api_key,
+                    model=settings.llm.openai_model,
                     temperature=0.0,  # Use deterministic scoring
                 )
             except Exception as e:
-                if not settings.development.mock_llm_responses:
+                if not settings.app.mock_llm_responses:
                     raise RerankingError(f"Failed to initialize LLM: {e}")
                 logger.warning("Using mock LLM for development")
                 self.llm = None
@@ -284,7 +284,7 @@ class LLMReranker:
             for i, node in enumerate(reranked_nodes):
                 node.node.metadata["rerank_position"] = i + 1
                 node.node.metadata["rerank_model"] = "llm_rerank"
-                node.node.metadata["llm_model"] = self.settings.openai.openai_model if self.settings else "unknown"
+                node.node.metadata["llm_model"] = self.settings.llm.openai_model if self.settings else "unknown"
                 if not hasattr(node.node.metadata, "original_score"):
                     node.node.metadata["original_score"] = getattr(node, "original_score", node.score)
 
@@ -298,197 +298,6 @@ class LLMReranker:
                 reranker_type="llm",
                 num_documents=len(nodes),
             )
-
-
-class EnsembleReranker:
-    """Ensemble reranking combining multiple reranking models."""
-
-    def __init__(
-        self,
-        rerankers: List[Tuple[str, Any, float]],
-        top_n: int = 3,
-        fusion_method: str = "weighted_average",
-    ):
-        """
-        Initialize ensemble reranker.
-
-        Args:
-            rerankers: List of (name, reranker, weight) tuples
-            top_n: Number of top results to return
-            fusion_method: Method for combining scores
-        """
-        self.rerankers = rerankers
-        self.top_n = top_n
-        self.fusion_method = fusion_method
-
-    async def rerank(
-        self,
-        query: str,
-        nodes: List[NodeWithScore],
-    ) -> List[NodeWithScore]:
-        """
-        Rerank using ensemble of models.
-
-        Args:
-            query: Query string
-            nodes: List of nodes to rerank
-
-        Returns:
-            Reranked nodes
-        """
-        try:
-            if not nodes:
-                return []
-
-            # Apply each reranker
-            reranker_results = []
-            for name, reranker, weight in self.rerankers:
-                try:
-                    if hasattr(reranker, 'rerank'):
-                        reranked = await reranker.rerank(query, nodes.copy())
-                    else:
-                        # Assume it's a LlamaIndex postprocessor
-                        query_bundle = QueryBundle(query_str=query)
-                        reranked = reranker.postprocess_nodes(nodes.copy(), query_bundle)
-
-                    reranker_results.append((name, reranked, weight))
-                    logger.debug(f"Reranker {name} processed {len(reranked)} nodes")
-
-                except Exception as e:
-                    logger.error(f"Reranker {name} failed: {e}")
-                    continue
-
-            if not reranker_results:
-                logger.warning("All rerankers failed, returning original order")
-                return nodes[:self.top_n]
-
-            # Fuse results
-            fused_nodes = self._fuse_reranker_results(reranker_results, nodes)
-
-            # Add ensemble metadata
-            for i, node in enumerate(fused_nodes):
-                node.node.metadata["rerank_position"] = i + 1
-                node.node.metadata["rerank_model"] = "ensemble"
-                node.node.metadata["fusion_method"] = self.fusion_method
-                node.node.metadata["num_rerankers"] = len(reranker_results)
-
-            result = fused_nodes[:self.top_n]
-            logger.debug(f"Ensemble reranked {len(nodes)} -> {len(result)} nodes")
-            return result
-
-        except Exception as e:
-            logger.error(f"Ensemble reranking failed: {e}")
-            raise RerankingError(f"Ensemble reranking failed: {e}")
-
-    def _fuse_reranker_results(
-        self,
-        reranker_results: List[Tuple[str, List[NodeWithScore], float]],
-        original_nodes: List[NodeWithScore],
-    ) -> List[NodeWithScore]:
-        """Fuse results from multiple rerankers."""
-        if self.fusion_method == "weighted_average":
-            return self._weighted_average_fusion(reranker_results, original_nodes)
-        elif self.fusion_method == "rank_fusion":
-            return self._rank_fusion(reranker_results, original_nodes)
-        else:
-            logger.warning(f"Unknown fusion method {self.fusion_method}, using weighted_average")
-            return self._weighted_average_fusion(reranker_results, original_nodes)
-
-    def _weighted_average_fusion(
-        self,
-        reranker_results: List[Tuple[str, List[NodeWithScore], float]],
-        original_nodes: List[NodeWithScore],
-    ) -> List[NodeWithScore]:
-        """Fuse using weighted average of scores."""
-        # Create mapping from node_id to weighted scores
-        node_scores: Dict[str, float] = {}
-        node_weights: Dict[str, float] = {}
-        node_objects: Dict[str, NodeWithScore] = {}
-
-        # Initialize with original nodes
-        for node in original_nodes:
-            node_id = node.node.node_id
-            node_objects[node_id] = node
-            node_scores[node_id] = 0.0
-            node_weights[node_id] = 0.0
-
-        # Add weighted scores from each reranker
-        for name, reranked_nodes, weight in reranker_results:
-            for node in reranked_nodes:
-                node_id = node.node.node_id
-                if node_id in node_scores:
-                    # Normalize score to 0-1 range
-                    normalized_score = self._normalize_score(node.score)
-                    node_scores[node_id] += normalized_score * weight
-                    node_weights[node_id] += weight
-
-        # Calculate average scores
-        final_scores = []
-        for node_id in node_scores:
-            if node_weights[node_id] > 0:
-                avg_score = node_scores[node_id] / node_weights[node_id]
-                final_scores.append((node_id, avg_score))
-
-        # Sort by score
-        final_scores.sort(key=lambda x: x[1], reverse=True)
-
-        # Create final list
-        fused_nodes = []
-        for node_id, score in final_scores:
-            node = node_objects[node_id]
-            new_node = NodeWithScore(
-                node=node.node,
-                score=score,
-            )
-            new_node.node.metadata["ensemble_score"] = score
-            fused_nodes.append(new_node)
-
-        return fused_nodes
-
-    def _rank_fusion(
-        self,
-        reranker_results: List[Tuple[str, List[NodeWithScore], float]],
-        original_nodes: List[NodeWithScore],
-    ) -> List[NodeWithScore]:
-        """Fuse using rank-based approach (similar to RRF)."""
-        node_scores: Dict[str, float] = {}
-        node_objects: Dict[str, NodeWithScore] = {}
-
-        # Initialize
-        for node in original_nodes:
-            node_id = node.node.node_id
-            node_objects[node_id] = node
-            node_scores[node_id] = 0.0
-
-        # Add rank-based scores
-        k = 60  # RRF parameter
-        for name, reranked_nodes, weight in reranker_results:
-            for rank, node in enumerate(reranked_nodes):
-                node_id = node.node.node_id
-                if node_id in node_scores:
-                    rrf_score = weight / (k + rank + 1)
-                    node_scores[node_id] += rrf_score
-
-        # Sort by combined score
-        sorted_scores = sorted(node_scores.items(), key=lambda x: x[1], reverse=True)
-
-        # Create final list
-        fused_nodes = []
-        for node_id, score in sorted_scores:
-            node = node_objects[node_id]
-            new_node = NodeWithScore(
-                node=node.node,
-                score=score,
-            )
-            new_node.node.metadata["rank_fusion_score"] = score
-            fused_nodes.append(new_node)
-
-        return fused_nodes
-
-    def _normalize_score(self, score: float) -> float:
-        """Normalize score to 0-1 range."""
-        # Simple sigmoid normalization
-        return 1.0 / (1.0 + math.exp(-score))
 
 
 class RerankingService:
@@ -513,14 +322,14 @@ class RerankingService:
             # Cross-encoder reranker
             if FLAG_EMBEDDING_AVAILABLE or SENTENCE_TRANSFORMERS_AVAILABLE:
                 self._rerankers["cross_encoder"] = CrossEncoderReranker(
-                    model_name=self.settings.reranking.rerank_model,
-                    top_n=self.settings.reranking.rerank_top_n,
+                    model_name=self.settings.rag.rerank_model,
+                    top_n=self.settings.rag.rerank_top_n,
                 )
 
             # LLM reranker
-            if self.settings.reranking.use_llm_rerank:
+            if self.settings.rag.use_llm_rerank:
                 self._rerankers["llm"] = LLMReranker(
-                    top_n=self.settings.reranking.rerank_top_n,
+                    top_n=self.settings.rag.rerank_top_n,
                     settings=self.settings,
                 )
 
@@ -555,11 +364,11 @@ class RerankingService:
                 return []
 
             start_time = datetime.utcnow()
-            top_n = top_n or self.settings.reranking.rerank_top_n
+            top_n = top_n or self.settings.rag.rerank_top_n
 
             # Determine model
             if model is None:
-                model = RerankingModel(self.settings.reranking.rerank_model)
+                model = RerankingModel(self.settings.rag.rerank_model)
 
             logger.info(f"Reranking {len(nodes)} nodes with {model.value}")
 
@@ -648,9 +457,9 @@ class RerankingService:
         """Get reranking service statistics."""
         return {
             "available_rerankers": list(self._rerankers.keys()),
-            "default_model": self.settings.reranking.rerank_model,
-            "default_top_n": self.settings.reranking.rerank_top_n,
-            "llm_rerank_enabled": self.settings.reranking.use_llm_rerank,
+            "default_model": self.settings.rag.rerank_model,
+            "default_top_n": self.settings.rag.rerank_top_n,
+            "llm_rerank_enabled": self.settings.rag.use_llm_rerank,
             "cross_encoder_available": FLAG_EMBEDDING_AVAILABLE or SENTENCE_TRANSFORMERS_AVAILABLE,
             "flag_embedding_available": FLAG_EMBEDDING_AVAILABLE,
             "sentence_transformers_available": SENTENCE_TRANSFORMERS_AVAILABLE,

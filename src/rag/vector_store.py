@@ -85,8 +85,8 @@ class ChromaVectorStore(VectorStore):
             # Use default OpenAI embedding function
             try:
                 self.embedding_function = embedding_functions.OpenAIEmbeddingFunction(
-                    api_key=settings.openai.openai_api_key if settings else None,
-                    model_name=settings.openai.openai_embedding_model if settings else "text-embedding-3-small",
+                    api_key=settings.llm.openai_api_key if settings else None,
+                    model_name=settings.llm.openai_embedding_model if settings else "text-embedding-3-small",
                 )
             except Exception as e:
                 logger.warning(f"Failed to initialize embedding function: {e}")

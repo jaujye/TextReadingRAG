@@ -75,10 +75,10 @@ async def query_documents(
 
         # Initialize LLM for response generation
         llm = OpenAI(
-            api_key=settings.openai.openai_api_key,
-            model=settings.openai.openai_model,
-            temperature=request.temperature or settings.openai.openai_temperature,
-            max_tokens=request.max_response_length or settings.openai.openai_max_tokens,
+            api_key=settings.llm.openai_api_key,
+            model=settings.llm.openai_model,
+            temperature=request.temperature or settings.llm.openai_temperature,
+            max_tokens=request.max_response_length or settings.llm.openai_max_tokens,
         )
 
         # Step 1: Query Expansion (if enabled)
@@ -368,10 +368,10 @@ async def stream_query_documents(
         async def generate_streaming_response():
             # Initialize LLM for streaming
             llm = OpenAI(
-                api_key=settings.openai.openai_api_key,
-                model=settings.openai.openai_model,
-                temperature=request.temperature or settings.openai.openai_temperature,
-                max_tokens=request.max_response_length or settings.openai.openai_max_tokens,
+                api_key=settings.llm.openai_api_key,
+                model=settings.llm.openai_model,
+                temperature=request.temperature or settings.llm.openai_temperature,
+                max_tokens=request.max_response_length or settings.llm.openai_max_tokens,
             )
 
             # Step 1: Send initial status
@@ -476,8 +476,8 @@ async def compare_documents(
 
         # Initialize LLM
         llm = OpenAI(
-            api_key=settings.openai.openai_api_key,
-            model=settings.openai.openai_model,
+            api_key=settings.llm.openai_api_key,
+            model=settings.llm.openai_model,
             temperature=0.1,  # Lower temperature for more consistent comparisons
         )
 
@@ -580,8 +580,8 @@ async def summarize_documents(
 
         # Initialize LLM
         llm = OpenAI(
-            api_key=settings.openai.openai_api_key,
-            model=settings.openai.openai_model,
+            api_key=settings.llm.openai_api_key,
+            model=settings.llm.openai_model,
             temperature=0.2,
         )
 
@@ -713,10 +713,10 @@ async def get_query_stats(
             "expansion_stats": query_expansion_service.get_expansion_stats(),
             "reranking_stats": reranking_service.get_reranking_stats(),
             "system_config": {
-                "default_retrieval_mode": settings.hybrid_search.alpha,
-                "default_top_k": settings.hybrid_search.hybrid_top_k,
-                "query_expansion_enabled": settings.query_expansion.enable_query_expansion,
-                "reranking_enabled": settings.reranking.use_llm_rerank,
+                "default_retrieval_mode": settings.rag.alpha,
+                "default_top_k": settings.rag.hybrid_top_k,
+                "query_expansion_enabled": settings.rag.enable_query_expansion,
+                "reranking_enabled": settings.rag.use_llm_rerank,
             },
             "timestamp": datetime.utcnow().isoformat(),
         }

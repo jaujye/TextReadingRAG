@@ -2,7 +2,7 @@
 
 import logging
 from functools import lru_cache
-from typing import AsyncGenerator, Optional
+from typing import Any, AsyncGenerator, Optional
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -20,43 +20,9 @@ logger = logging.getLogger(__name__)
 
 
 @lru_cache()
-def get_cached_settings() -> Settings:
-    """Get cached settings instance to avoid re-loading configuration."""
+def get_settings_dependency() -> Settings:
+    """Get cached settings instance."""
     return get_settings()
-
-
-async def get_settings_dependency() -> Settings:
-    """FastAPI dependency to get application settings."""
-    return get_cached_settings()
-
-
-async def verify_api_key(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    settings: Settings = Depends(get_settings_dependency),
-) -> bool:
-    """
-    Verify API key for authenticated endpoints.
-
-    This is a placeholder for API key authentication.
-    In production, implement proper API key validation.
-    """
-    if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API key required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # In production, verify the API key against a database or external service
-    # For now, we'll accept any non-empty token
-    if not credentials.credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    return True
 
 
 async def get_vector_store_client(
@@ -72,9 +38,9 @@ async def get_vector_store_client(
         from src.rag.vector_store import ChromaVectorStore
 
         return ChromaVectorStore(
-            host=settings.chroma.chroma_host,
-            port=settings.chroma.chroma_port,
-            persist_directory=settings.chroma.chroma_persist_directory,
+            host=settings.rag.chroma_host,
+            port=settings.rag.chroma_port,
+            persist_directory=settings.rag.chroma_persist_directory,
         )
     except Exception as e:
         logger.error(f"Failed to initialize vector store: {e}")
@@ -170,33 +136,13 @@ async def validate_file_upload(
 
     if content_length:
         content_length = int(content_length)
-        max_size_bytes = settings.file_upload.max_file_size * 1024 * 1024  # Convert MB to bytes
+        max_size_bytes = settings.app.max_file_size * 1024 * 1024  # Convert MB to bytes
 
         if content_length > max_size_bytes:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"File too large. Maximum size: {settings.file_upload.max_file_size}MB",
+                detail=f"File too large. Maximum size: {settings.app.max_file_size}MB",
             )
-
-    return True
-
-
-async def check_rate_limit(
-    request: Request,
-    settings: Settings = Depends(get_settings_dependency),
-) -> bool:
-    """
-    Check rate limiting for API requests.
-
-    This is a placeholder for rate limiting implementation.
-    In production, integrate with Redis or similar for distributed rate limiting.
-    """
-    # Get client IP
-    client_ip = request.client.host if request.client else "unknown"
-
-    # In production, implement actual rate limiting logic
-    # For now, we'll just log the request
-    logger.info(f"API request from {client_ip}")
 
     return True
 
@@ -209,8 +155,8 @@ async def validate_openai_config(
 
     Ensures API key is available and valid.
     """
-    if not settings.openai.openai_api_key:
-        if not settings.development.mock_llm_responses:
+    if not settings.llm.openai_api_key:
+        if not settings.app.mock_llm_responses:
             raise ConfigurationError(
                 "OpenAI API key not configured. Set OPENAI_API_KEY environment variable."
             )
@@ -218,92 +164,47 @@ async def validate_openai_config(
     return True
 
 
+# Global Redis connection pool
+_redis_pool: Optional[Any] = None
+
+
 async def get_cache_client(
     settings: Settings = Depends(get_settings_dependency),
 ):
     """
-    Get Redis cache client if caching is enabled.
+    Get Redis cache client from connection pool.
 
     Returns None if caching is disabled.
     """
-    if not settings.cache.enable_cache:
+    if not settings.app.enable_cache:
         return None
 
-    try:
-        import redis.asyncio as redis
-
-        return redis.Redis(
-            host=settings.cache.redis_host,
-            port=settings.cache.redis_port,
-            db=settings.cache.redis_db,
-            password=settings.cache.redis_password,
-            decode_responses=True,
-        )
-    except ImportError:
-        logger.warning("Redis not available. Caching disabled.")
-        return None
-    except Exception as e:
-        logger.error(f"Failed to connect to Redis: {e}")
-        return None
-
-
-class DatabaseManager:
-    """Database connection manager for dependency injection."""
-
-    def __init__(self, settings: Settings):
-        self.settings = settings
-        self._vector_store = None
-        self._cache_client = None
-
-    async def get_vector_store(self):
-        """Get or create vector store connection."""
-        if not self._vector_store:
-            from src.rag.vector_store import ChromaVectorStore
-            self._vector_store = ChromaVectorStore(
-                host=self.settings.chroma.chroma_host,
-                port=self.settings.chroma.chroma_port,
-                persist_directory=self.settings.chroma.chroma_persist_directory,
-            )
-        return self._vector_store
-
-    async def get_cache_client(self):
-        """Get or create cache client."""
-        if not self._cache_client and self.settings.cache.enable_cache:
+    global _redis_pool
+    if _redis_pool is None:
+        try:
             import redis.asyncio as redis
-            self._cache_client = redis.Redis(
-                host=self.settings.cache.redis_host,
-                port=self.settings.cache.redis_port,
-                db=self.settings.cache.redis_db,
-                password=self.settings.cache.redis_password,
+            _redis_pool = redis.Redis(
+                host=settings.app.redis_host,
+                port=settings.app.redis_port,
+                db=settings.app.redis_db,
+                password=settings.app.redis_password,
                 decode_responses=True,
             )
-        return self._cache_client
+        except ImportError:
+            logger.warning("Redis not available. Caching disabled.")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to connect to Redis: {e}")
+            return None
 
-    async def close_connections(self):
-        """Close all database connections."""
-        if self._cache_client:
-            await self._cache_client.close()
-
-
-# Global database manager instance
-_db_manager: Optional[DatabaseManager] = None
-
-
-async def get_database_manager(
-    settings: Settings = Depends(get_settings_dependency),
-) -> DatabaseManager:
-    """Get database manager instance."""
-    global _db_manager
-    if not _db_manager:
-        _db_manager = DatabaseManager(settings)
-    return _db_manager
+    return _redis_pool
 
 
 async def lifespan_context() -> AsyncGenerator[None, None]:
     """
     Application lifespan context manager.
 
-    Handles startup and shutdown of database connections.
+    Handles startup and shutdown of connections.
     """
     # Startup
     logger.info("Starting up TextReadingRAG application...")
@@ -313,6 +214,6 @@ async def lifespan_context() -> AsyncGenerator[None, None]:
     finally:
         # Shutdown
         logger.info("Shutting down TextReadingRAG application...")
-        global _db_manager
-        if _db_manager:
-            await _db_manager.close_connections()
+        global _redis_pool
+        if _redis_pool:
+            await _redis_pool.close()

@@ -81,17 +81,17 @@ async def upload_document(
     """Upload and process a single document."""
     try:
         # Validate file type
-        if not file.filename.lower().endswith(tuple(settings.file_upload.allowed_extensions)):
+        if not file.filename.lower().endswith(tuple(settings.app.allowed_extensions)):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"File type not supported. Allowed: {settings.file_upload.allowed_extensions}",
+                detail=f"File type not supported. Allowed: {settings.app.allowed_extensions}",
             )
 
         # Generate document ID
         document_id = str(uuid.uuid4())
 
         # Save uploaded file
-        upload_path = Path(settings.file_upload.upload_dir) / f"{document_id}_{file.filename}"
+        upload_path = Path(settings.app.upload_dir) / f"{document_id}_{file.filename}"
         upload_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(upload_path, "wb") as buffer:
@@ -124,7 +124,7 @@ async def upload_document(
             filename=file.filename,
             size=len(content),
             content_type=file.content_type or "application/pdf",
-            collection_name=collection_name or settings.chroma.chroma_collection_name,
+            collection_name=collection_name or settings.rag.chroma_collection_name,
             processing_status=ProcessingStatus.PENDING,
         )
 
@@ -172,7 +172,7 @@ async def upload_documents_batch(
     """Upload and process multiple documents in batch."""
     try:
         # Validate batch size
-        max_files = settings.performance.max_concurrent_uploads
+        max_files = settings.app.max_concurrent_uploads
         if len(files) > max_files:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -187,10 +187,10 @@ async def upload_documents_batch(
         for file in files:
             try:
                 # Validate file type
-                if not file.filename.lower().endswith(tuple(settings.file_upload.allowed_extensions)):
+                if not file.filename.lower().endswith(tuple(settings.app.allowed_extensions)):
                     failed_uploads.append({
                         "filename": file.filename,
-                        "error": f"File type not supported. Allowed: {settings.file_upload.allowed_extensions}",
+                        "error": f"File type not supported. Allowed: {settings.app.allowed_extensions}",
                     })
                     continue
 
@@ -198,7 +198,7 @@ async def upload_documents_batch(
                 document_id = str(uuid.uuid4())
 
                 # Save uploaded file
-                upload_path = Path(settings.file_upload.upload_dir) / f"{document_id}_{file.filename}"
+                upload_path = Path(settings.app.upload_dir) / f"{document_id}_{file.filename}"
                 upload_path.parent.mkdir(parents=True, exist_ok=True)
 
                 with open(upload_path, "wb") as buffer:
@@ -211,7 +211,7 @@ async def upload_documents_batch(
                     filename=file.filename,
                     size=len(content),
                     content_type=file.content_type or "application/pdf",
-                    collection_name=collection_name or settings.chroma.chroma_collection_name,
+                    collection_name=collection_name or settings.rag.chroma_collection_name,
                     processing_status=ProcessingStatus.PENDING,
                 )
 
