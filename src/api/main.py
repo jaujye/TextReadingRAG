@@ -284,12 +284,10 @@ async def root() -> Dict[str, str]:
 
 
 # Include API routers
-# Note: These will be imported and included once the endpoint modules are created
+from src.api.endpoints import documents, query
 
-# from src.api.endpoints import documents, query, health
-# app.include_router(documents.router, prefix="/api/documents", tags=["Documents"])
-# app.include_router(query.router, prefix="/api/query", tags=["Query"])
-# app.include_router(health.router, prefix="/api/health", tags=["Health"])
+app.include_router(documents.router, prefix="/api/documents", tags=["Documents"])
+app.include_router(query.router, prefix="/api/query", tags=["Query"])
 
 
 if __name__ == "__main__":

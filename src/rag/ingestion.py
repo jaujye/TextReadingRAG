@@ -35,6 +35,7 @@ from src.core.exceptions import (
     VectorStoreError,
 )
 from src.rag.vector_store import ChromaVectorStore
+from src.rag.language_utils import detect_language, is_chinese, split_chinese_text
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,7 @@ class DocumentProcessor:
         self,
         chunk_size: Optional[int] = None,
         chunk_overlap: Optional[int] = None,
+        language: Optional[str] = None,
     ) -> SentenceSplitter:
         """
         Create a text splitter with specified parameters.
@@ -76,12 +78,18 @@ class DocumentProcessor:
         Args:
             chunk_size: Size of text chunks
             chunk_overlap: Overlap between chunks
+            language: Language code for language-specific splitting
 
         Returns:
             Configured text splitter
         """
-        chunk_size = chunk_size or self.settings.rag.chunk_size
-        chunk_overlap = chunk_overlap or self.settings.rag.chunk_overlap
+        # Use language-specific chunk sizes for Chinese
+        if language == 'zh':
+            chunk_size = chunk_size or self.settings.rag.chinese_chunk_size
+            chunk_overlap = chunk_overlap or self.settings.rag.chinese_chunk_overlap
+        else:
+            chunk_size = chunk_size or self.settings.rag.chunk_size
+            chunk_overlap = chunk_overlap or self.settings.rag.chunk_overlap
 
         return SentenceSplitter(
             chunk_size=chunk_size,
@@ -90,6 +98,41 @@ class DocumentProcessor:
             paragraph_separator="\n\n",
             secondary_chunking_regex="[^,.;]+[,.;]?",
         )
+
+    def split_text_with_language_detection(
+        self,
+        text: str,
+        chunk_size: Optional[int] = None,
+        chunk_overlap: Optional[int] = None,
+    ) -> Tuple[List[str], str]:
+        """
+        Split text using language-aware splitting.
+
+        Args:
+            text: Text to split
+            chunk_size: Target chunk size
+            chunk_overlap: Overlap size
+
+        Returns:
+            Tuple of (chunks, detected_language)
+        """
+        # Detect language if enabled
+        language = detect_language(text) if self.settings.rag.enable_language_detection else self.settings.rag.default_language
+
+        # Use Chinese-specific splitting for Chinese text
+        if language == 'zh':
+            chunk_size = chunk_size or self.settings.rag.chinese_chunk_size
+            chunk_overlap = chunk_overlap or self.settings.rag.chinese_chunk_overlap
+            chunks = split_chinese_text(text, chunk_size, chunk_overlap)
+        else:
+            # Use LlamaIndex SentenceSplitter for English
+            text_splitter = self.create_text_splitter(chunk_size, chunk_overlap, language)
+            from llama_index.core import Document
+            doc = Document(text=text)
+            nodes = text_splitter.get_nodes_from_documents([doc])
+            chunks = [node.text for node in nodes]
+
+        return chunks, language
 
     def extract_document_metadata(
         self,
@@ -228,6 +271,9 @@ class DocumentLoader:
             for doc in documents:
                 doc.metadata.update(base_metadata)
                 doc.metadata["parsing_method"] = "llamaparse"
+                # Detect and add language
+                if self.settings.rag.enable_language_detection and doc.text:
+                    doc.metadata["language"] = detect_language(doc.text)
 
             return documents
 
@@ -255,6 +301,9 @@ class DocumentLoader:
             for doc in documents:
                 doc.metadata.update(base_metadata)
                 doc.metadata["parsing_method"] = "simple_reader"
+                # Detect and add language
+                if self.settings.rag.enable_language_detection and doc.text:
+                    doc.metadata["language"] = detect_language(doc.text)
 
             return documents
 
@@ -506,7 +555,7 @@ class DocumentIngestionService:
         chunk_overlap: Optional[int] = None,
     ) -> List[BaseNode]:
         """
-        Process documents into nodes with chunking and metadata extraction.
+        Process documents into nodes with language-aware chunking.
 
         Args:
             documents: List of documents to process
@@ -517,28 +566,64 @@ class DocumentIngestionService:
             List of processed nodes
         """
         try:
-            # Create text splitter
-            text_splitter = self.loader.processor.create_text_splitter(chunk_size, chunk_overlap)
+            all_nodes = []
 
-            # Create ingestion pipeline
-            pipeline = IngestionPipeline(
-                transformations=[
-                    text_splitter,
-                ],
-                docstore=None,  # We'll handle storage separately
-            )
+            for doc in documents:
+                # Get language from metadata or detect it
+                language = doc.metadata.get("language")
+                if not language and self.settings.rag.enable_language_detection:
+                    language = detect_language(doc.text)
+                    doc.metadata["language"] = language
 
-            # Process documents
-            nodes = pipeline.run(documents=documents, show_progress=True)
+                # Use language-specific splitting for Chinese
+                if language == 'zh':
+                    cs = chunk_size or self.settings.rag.chinese_chunk_size
+                    co = chunk_overlap or self.settings.rag.chinese_chunk_overlap
+                    chunks = split_chinese_text(doc.text, cs, co)
 
-            # Add additional metadata to nodes
-            for node in nodes:
-                node.metadata["chunk_size"] = chunk_size or self.settings.rag.chunk_size
-                node.metadata["chunk_overlap"] = chunk_overlap or self.settings.rag.chunk_overlap
-                node.metadata["node_id"] = node.node_id or str(uuid.uuid4())
+                    # Create nodes from chunks
+                    for i, chunk in enumerate(chunks):
+                        node = TextNode(
+                            text=chunk,
+                            metadata={
+                                **doc.metadata,
+                                "chunk_index": i,
+                                "chunk_size": cs,
+                                "chunk_overlap": co,
+                                "language": language,
+                            },
+                            id_=f"{doc.doc_id}_{i}" if hasattr(doc, 'doc_id') else str(uuid.uuid4()),
+                        )
+                        all_nodes.append(node)
+                else:
+                    # Use LlamaIndex pipeline for English
+                    text_splitter = self.loader.processor.create_text_splitter(
+                        chunk_size, chunk_overlap, language
+                    )
 
-            logger.info(f"Processed {len(documents)} documents into {len(nodes)} nodes")
-            return nodes
+                    pipeline = IngestionPipeline(
+                        transformations=[text_splitter],
+                        docstore=None,
+                    )
+
+                    nodes = pipeline.run(documents=[doc], show_progress=False)
+
+                    # Add language metadata
+                    for node in nodes:
+                        node.metadata["language"] = language or self.settings.rag.default_language
+                        node.metadata["chunk_size"] = chunk_size or self.settings.rag.chunk_size
+                        node.metadata["chunk_overlap"] = chunk_overlap or self.settings.rag.chunk_overlap
+
+                    all_nodes.extend(nodes)
+
+            # Add node IDs if missing
+            for node in all_nodes:
+                if not node.node_id:
+                    node.node_id = str(uuid.uuid4())
+                node.metadata["node_id"] = node.node_id
+
+            logger.info(f"Processed {len(documents)} documents into {len(all_nodes)} nodes")
+            return all_nodes
 
         except Exception as e:
             logger.error(f"Failed to process documents: {e}")

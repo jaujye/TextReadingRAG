@@ -14,6 +14,7 @@ from llama_index.core.llms.llm import LLM
 
 from src.core.config import Settings
 from src.core.exceptions import QueryExpansionError, LLMError
+from src.rag.language_utils import detect_language, is_chinese
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,7 @@ class SynonymExpander:
         min_word_length: int = 4,
     ) -> List[str]:
         """
-        Expand query using synonyms.
+        Expand query using synonyms (English only).
 
         Args:
             query: Original query
@@ -84,6 +85,10 @@ class SynonymExpander:
             List of expanded queries
         """
         try:
+            # Skip synonym expansion for Chinese queries
+            if is_chinese(query):
+                logger.info("Skipping synonym expansion for Chinese query")
+                return []
             expanded_queries = []
 
             # Tokenize and get POS tags

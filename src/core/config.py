@@ -136,6 +136,16 @@ class RAGConfig(BaseSettings):
     chunk_overlap: int = Field(default=128, description="Chunk overlap size")
     max_chunks_per_doc: int = Field(default=1000, description="Maximum chunks per document")
 
+    # Language support
+    supported_languages: List[str] = Field(
+        default=["en", "zh"],
+        description="Supported languages (en=English, zh=Chinese)"
+    )
+    default_language: str = Field(default="en", description="Default language")
+    enable_language_detection: bool = Field(default=True, description="Enable automatic language detection")
+    chinese_chunk_size: int = Field(default=256, description="Text chunk size for Chinese (characters)")
+    chinese_chunk_overlap: int = Field(default=64, description="Chunk overlap size for Chinese")
+
     # Hybrid search
     dense_top_k: int = Field(default=10, description="Top-k for dense vector search")
     sparse_top_k: int = Field(default=10, description="Top-k for sparse BM25 search")
@@ -194,6 +204,12 @@ class RAGConfig(BaseSettings):
         allowed_methods = {"llm", "synonym", "hyde"}
         if not all(method in allowed_methods for method in v):
             raise ValueError(f"Invalid expansion methods. Allowed: {allowed_methods}")
+        return v
+
+    @validator("default_language")
+    def validate_default_language(cls, v, values):
+        if "supported_languages" in values and v not in values["supported_languages"]:
+            raise ValueError(f"Default language must be in supported languages")
         return v
 
 

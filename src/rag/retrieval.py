@@ -16,8 +16,32 @@ from llama_index.retrievers.bm25 import BM25Retriever
 from src.core.config import Settings
 from src.core.exceptions import RetrievalError, ConfigurationError
 from src.rag.vector_store import ChromaVectorStore
+from src.rag.language_utils import detect_language, tokenize_chinese
 
 logger = logging.getLogger(__name__)
+
+
+def multilingual_tokenizer(text: str) -> List[str]:
+    """
+    Tokenize text based on language detection.
+
+    Args:
+        text: Input text
+
+    Returns:
+        List of tokens
+    """
+    try:
+        language = detect_language(text)
+        if language == 'zh':
+            # Use jieba for Chinese
+            return tokenize_chinese(text)
+        else:
+            # Use simple whitespace tokenization for English
+            return text.lower().split()
+    except Exception as e:
+        logger.warning(f"Tokenization failed, using default: {e}")
+        return text.lower().split()
 
 
 class RetrievalMode(str, Enum):
@@ -137,15 +161,16 @@ class SparseRetriever:
         nodes: List[BaseNode],
         collection_name: str,
     ) -> BM25Retriever:
-        """Get or create BM25 retriever for a collection."""
+        """Get or create BM25 retriever with multilingual tokenization support."""
         if collection_name not in self._bm25_retrievers:
             try:
                 retriever = BM25Retriever.from_defaults(
                     nodes=nodes,
                     similarity_top_k=self.settings.rag.sparse_top_k,
+                    tokenizer=multilingual_tokenizer,
                 )
                 self._bm25_retrievers[collection_name] = retriever
-                logger.info(f"Created BM25 retriever for collection: {collection_name}")
+                logger.info(f"Created BM25 retriever with multilingual tokenizer for collection: {collection_name}")
             except Exception as e:
                 logger.error(f"Failed to create BM25 retriever: {e}")
                 raise RetrievalError(f"Failed to create BM25 retriever: {e}")

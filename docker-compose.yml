@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # ChromaDB Vector Database
   chromadb:
-    image: chromadb/chroma:0.4.22
+    image: chromadb/chroma:latest
     container_name: textreadingrag-chromadb
     ports:
       - "8000:8000"
