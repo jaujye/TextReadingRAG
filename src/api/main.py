@@ -12,11 +12,14 @@ from typing import Dict, Any
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from src.core.config import get_settings
+from src.core import metrics as rag_metrics
 from src.core.dependencies import lifespan_context
 from src.core.exceptions import (
     TextReadingRAGException,
@@ -96,6 +99,17 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Initialize Prometheus instrumentation
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=True)
+
+# Set system info
+rag_metrics.set_system_info({
+    "app_name": settings.app.app_name,
+    "app_version": settings.app.app_version,
+    "openai_model": settings.llm.openai_model,
+    "embedding_model": settings.llm.openai_embedding_model,
+})
 
 
 # Exception handlers

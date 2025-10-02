@@ -1,0 +1,93 @@
+# Prometheus Configuration for TextReadingRAG
+# Monitors FastAPI application, ChromaDB, Redis, and system metrics
+
+global:
+  scrape_interval: 15s # Default scrape interval
+  evaluation_interval: 15s # Evaluate rules every 15s
+  external_labels:
+    cluster: 'textreadingrag'
+    environment: 'production'
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - 'alertmanager:9093'
+
+# Rule files for alerting
+rule_files:
+  - '/etc/prometheus/alert_rules.yml'
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # TextReadingRAG FastAPI Application
+  - job_name: 'textreadingrag-api'
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['api:8000']
+        labels:
+          service: 'textreadingrag-api'
+          component: 'backend'
+    # For local development (if API runs on host)
+      - targets: ['host.docker.internal:8080']
+        labels:
+          service: 'textreadingrag-api'
+          component: 'backend'
+          environment: 'development'
+
+  # ChromaDB Vector Store
+  - job_name: 'chromadb'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['chromadb:8000']
+        labels:
+          service: 'chromadb'
+          component: 'vectorstore'
+    # ChromaDB metrics endpoint (if available)
+    metrics_path: '/metrics'
+
+  # Redis Exporter
+  - job_name: 'redis'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'redis'
+          component: 'cache'
+
+  # Node Exporter (System Metrics)
+  - job_name: 'node-exporter'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'node-exporter'
+          component: 'system'
+
+  # cAdvisor (Container Metrics)
+  - job_name: 'cadvisor'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels:
+          service: 'cadvisor'
+          component: 'containers'
+    metrics_path: '/metrics'
+
+  # Nginx (if using reverse proxy)
+  - job_name: 'nginx'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+        labels:
+          service: 'nginx'
+          component: 'proxy'

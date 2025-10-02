@@ -1,0 +1,231 @@
+# Prometheus Alert Rules for TextReadingRAG
+# Define alerts for critical system conditions
+
+groups:
+  # API Health Alerts
+  - name: api_alerts
+    interval: 30s
+    rules:
+      - alert: APIHighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "High API error rate detected"
+          description: "API error rate is {{ $value | humanizePercentage }} for instance {{ $labels.instance }}"
+
+      - alert: APIHighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API latency detected"
+          description: "95th percentile latency is {{ $value }}s for {{ $labels.instance }}"
+
+      - alert: APIDown
+        expr: up{job="textreadingrag-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "TextReadingRAG API is down"
+          description: "API instance {{ $labels.instance }} is unreachable"
+
+  # RAG System Alerts
+  - name: rag_system_alerts
+    interval: 30s
+    rules:
+      - alert: HighRetrievalLatency
+        expr: histogram_quantile(0.95, rate(rag_retrieval_duration_seconds_bucket[5m])) > 1.5
+        for: 5m
+        labels:
+          severity: warning
+          component: retrieval
+        annotations:
+          summary: "High retrieval latency"
+          description: "95th percentile retrieval time is {{ $value }}s"
+
+      - alert: HighQueryExpansionFailureRate
+        expr: rate(rag_query_expansion_errors_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          component: query_expansion
+        annotations:
+          summary: "High query expansion failure rate"
+          description: "Query expansion error rate is {{ $value }} per second"
+
+      - alert: HighRerankingLatency
+        expr: histogram_quantile(0.95, rate(rag_reranking_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: reranking
+        annotations:
+          summary: "High reranking latency"
+          description: "95th percentile reranking time is {{ $value }}s"
+
+      - alert: LowRetrievalQuality
+        expr: avg(rag_retrieval_quality_score) < 0.6
+        for: 10m
+        labels:
+          severity: warning
+          component: retrieval
+        annotations:
+          summary: "Low retrieval quality detected"
+          description: "Average retrieval quality score is {{ $value }}"
+
+  # ChromaDB Alerts
+  - name: chromadb_alerts
+    interval: 30s
+    rules:
+      - alert: ChromaDBDown
+        expr: up{job="chromadb"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: vectorstore
+        annotations:
+          summary: "ChromaDB is down"
+          description: "ChromaDB instance {{ $labels.instance }} is unreachable"
+
+      - alert: ChromaDBHighMemoryUsage
+        expr: (process_resident_memory_bytes{job="chromadb"} / 1024 / 1024 / 1024) > 4
+        for: 5m
+        labels:
+          severity: warning
+          component: vectorstore
+        annotations:
+          summary: "ChromaDB high memory usage"
+          description: "ChromaDB is using {{ $value }}GB of memory"
+
+  # Redis Alerts
+  - name: redis_alerts
+    interval: 30s
+    rules:
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance {{ $labels.instance }} is unreachable"
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is at {{ $value | humanizePercentage }}"
+
+      - alert: RedisHighEvictionRate
+        expr: rate(redis_evicted_keys_total[5m]) > 100
+        for: 3m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "High Redis eviction rate"
+          description: "Redis is evicting {{ $value }} keys per second"
+
+  # System Resource Alerts
+  - name: system_alerts
+    interval: 30s
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}% on {{ $labels.instance }}"
+
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is {{ $value }}% available on {{ $labels.instance }}"
+
+  # Container Alerts
+  - name: container_alerts
+    interval: 30s
+    rules:
+      - alert: ContainerHighCPU
+        expr: rate(container_cpu_usage_seconds_total{name!=""}[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: containers
+        annotations:
+          summary: "Container high CPU usage"
+          description: "Container {{ $labels.name }} CPU usage is {{ $value }}%"
+
+      - alert: ContainerHighMemory
+        expr: (container_memory_usage_bytes{name!=""} / container_spec_memory_limit_bytes{name!=""}) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          component: containers
+        annotations:
+          summary: "Container high memory usage"
+          description: "Container {{ $labels.name }} memory usage is {{ $value }}%"
+
+      - alert: ContainerRestart
+        expr: rate(container_last_seen{name!=""}[5m]) > 0
+        for: 1m
+        labels:
+          severity: info
+          component: containers
+        annotations:
+          summary: "Container restarted"
+          description: "Container {{ $labels.name }} has been restarted"
+
+  # Document Processing Alerts
+  - name: document_processing_alerts
+    interval: 30s
+    rules:
+      - alert: HighDocumentProcessingFailureRate
+        expr: rate(rag_document_processing_errors_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          component: ingestion
+        annotations:
+          summary: "High document processing failure rate"
+          description: "Document processing error rate is {{ $value }} per second"
+
+      - alert: SlowDocumentProcessing
+        expr: histogram_quantile(0.95, rate(rag_document_processing_duration_seconds_bucket[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+          component: ingestion
+        annotations:
+          summary: "Slow document processing"
+          description: "95th percentile document processing time is {{ $value }}s"
