@@ -1,13 +1,15 @@
 # TextReadingRAG 📚
 
-**Advanced PDF RAG System with Hybrid Retrieval, Query Expansion, and Reranking**
+**Advanced PDF RAG System with Hybrid Retrieval, Query Expansion, Reranking, and Production Monitoring**
 
-A state-of-the-art Retrieval-Augmented Generation (RAG) system designed for processing and querying PDF documents using cutting-edge AI techniques. Built with FastAPI, LlamaIndex, and ChromaDB for production-ready document intelligence applications.
+A state-of-the-art Retrieval-Augmented Generation (RAG) system designed for processing and querying PDF documents using cutting-edge AI techniques. Built with FastAPI, LlamaIndex, and ChromaDB for production-ready document intelligence applications with full Chinese language support and comprehensive observability.
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-green.svg)](https://fastapi.tiangolo.com/)
 [![LlamaIndex](https://img.shields.io/badge/LlamaIndex-0.10+-purple.svg)](https://llamaindex.ai/)
 [![ChromaDB](https://img.shields.io/badge/ChromaDB-0.4+-orange.svg)](https://www.trychroma.com/)
+[![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-red.svg)](https://prometheus.io/)
+[![Grafana](https://img.shields.io/badge/Grafana-Dashboard-orange.svg)](https://grafana.com/)
 
 ## 🚀 Features
 
@@ -19,6 +21,7 @@ A state-of-the-art Retrieval-Augmented Generation (RAG) system designed for proc
 - **💬 Smart Q&A**: Context-aware question answering with source attribution
 - **📊 Document Analysis**: Compare, summarize, and extract insights from documents
 - **⚡ Real-time Streaming**: Server-sent events for live response generation
+- **🇨🇳 Chinese Language Support**: Full support for Traditional and Simplified Chinese
 
 ### Advanced RAG Features
 - **Dynamic Retrieval Strategy**: Auto-selection based on query characteristics
@@ -27,28 +30,32 @@ A state-of-the-art Retrieval-Augmented Generation (RAG) system designed for proc
 - **Citation Tracking**: Precise source attribution with page and section references
 - **Confidence Scoring**: Reliability indicators for generated responses
 - **Batch Processing**: Parallel query processing for high throughput
+- **Language-Aware Processing**: Optimized chunking and tokenization for Chinese/English
 
-### Technical Excellence
+### Production Features
 - **🏗️ Modular Architecture**: Clean separation of concerns with extensible components
 - **🔧 Production Ready**: Comprehensive error handling, logging, and monitoring
 - **📈 Performance Optimized**: Async/await patterns and efficient vector operations
-- **🐳 Docker Support**: Complete containerization with Docker Compose
+- **🐳 Docker Support**: Complete containerization with Docker Compose profiles
 - **🔒 Security First**: Input validation, rate limiting, and secure defaults
 - **📱 API First**: RESTful API with OpenAPI documentation
+- **📊 Observability**: Prometheus metrics + Grafana dashboards + Alerting
+- **🧪 Comprehensive Testing**: Full test suite with Chinese language support
 
 ## 🏛️ Architecture
 
 ```mermaid
 graph TB
     Client[Client Application] --> FastAPI[FastAPI Server]
-    FastAPI --> Auth[Authentication & Rate Limiting]
+    FastAPI --> Metrics[Prometheus Metrics]
 
-    Auth --> Upload[Document Upload]
-    Auth --> Query[Query Processing]
+    FastAPI --> Upload[Document Upload]
+    FastAPI --> Query[Query Processing]
 
-    Upload --> Ingestion[Document Ingestion]
+    Upload --> Language[Language Detection]
+    Language --> Ingestion[Document Ingestion]
     Ingestion --> Parser[PDF Parser<br/>SimpleDirectoryReader + LlamaParse]
-    Parser --> Chunking[Text Chunking & Metadata]
+    Parser --> Chunking[Language-Aware Chunking<br/>EN: 512 chars / ZH: 256 chars]
     Chunking --> Embedding[Embedding Generation]
     Embedding --> ChromaDB[(ChromaDB<br/>Vector Store)]
 
@@ -60,6 +67,9 @@ graph TB
     Generation --> Response[Structured Response<br/>+ Sources + Metadata]
 
     ChromaDB --> Cache[(Redis Cache<br/>Optional)]
+    Metrics --> Prometheus[Prometheus]
+    Prometheus --> Grafana[Grafana Dashboard]
+    Grafana --> Alerts[Alert Manager]
 ```
 
 ### Component Overview
@@ -68,12 +78,14 @@ graph TB
 |-----------|------------|---------|
 | **API Layer** | FastAPI | REST endpoints, request validation, error handling |
 | **Document Ingestion** | LlamaIndex + LlamaParse | PDF processing, chunking, metadata extraction |
+| **Language Detection** | langdetect + jieba | Automatic language detection, Chinese tokenization |
 | **Vector Store** | ChromaDB | Hybrid vector/text search, persistence |
 | **Retrieval Engine** | Custom Hybrid | Dense + sparse retrieval with fusion algorithms |
 | **Query Expansion** | OpenAI + NLTK | Query enhancement and reformulation |
 | **Reranking** | BGE + Sentence Transformers | Multi-stage relevance optimization |
 | **LLM Integration** | OpenAI GPT | Response generation and reasoning |
 | **Caching** | Redis (Optional) | Query and response caching |
+| **Monitoring** | Prometheus + Grafana | Metrics collection, visualization, alerting |
 
 ## 🚀 Quick Start
 
@@ -86,7 +98,7 @@ graph TB
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/jaujye/TextReadingRAG.git
 cd TextReadingRAG
 ```
 
@@ -112,6 +124,9 @@ OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 ```bash
 # Start ChromaDB and Redis
 docker-compose up -d
+
+# (Optional) Start with monitoring stack
+docker-compose --profile monitoring up -d
 
 # Verify services are running
 docker-compose ps
@@ -140,6 +155,48 @@ python -m uvicorn src.api.main:app --host 0.0.0.0 --port 8080 --reload
 Open your browser and navigate to:
 - **API Documentation**: http://localhost:8080/docs
 - **Health Check**: http://localhost:8080/health
+- **Metrics**: http://localhost:8080/metrics
+- **Grafana Dashboard** (if monitoring enabled): http://localhost:3000
+
+## 🌏 Chinese Language Support
+
+TextReadingRAG has **native support for Chinese language** processing with optimized chunking, tokenization, and retrieval.
+
+### Features
+- ✅ **Automatic Language Detection**: Detects Chinese vs English content
+- ✅ **Jieba Tokenization**: Chinese word segmentation for BM25 search
+- ✅ **Optimized Chunking**: 256 characters for Chinese (vs 512 for English)
+- ✅ **Traditional & Simplified**: Supports both variants
+- ✅ **Mixed Content**: Handles documents with both Chinese and English
+
+### Quick Start (Chinese)
+
+```python
+import requests
+
+# Upload Chinese PDF
+with open("中文文档.pdf", "rb") as f:
+    response = requests.post(
+        "http://localhost:8080/api/documents/upload",
+        files={"file": f},
+        data={"collection_name": "chinese_docs"}
+    )
+
+# Query in Chinese
+query_data = {
+    "query": "這份文件的主要內容是什麼?",
+    "query_type": "question_answer",
+    "retrieval_strategy": "hybrid",
+    "enable_query_expansion": True
+}
+
+response = requests.post(
+    "http://localhost:8080/api/query/",
+    json=query_data
+)
+```
+
+📖 **Full Documentation**: [Chinese Language Support Guide](docs/CHINESE_SUPPORT.md) | [中文快速開始](docs/CHINESE_QUICK_START.md)
 
 ## 📖 API Usage
 
@@ -155,13 +212,24 @@ with open("document.pdf", "rb") as f:
         files={"file": f},
         data={
             "collection_name": "my_docs",
-            "use_llamaparse": "true",
+            "use_llamaparse": "false",
             "chunk_size": "512"
         }
     )
 
 print(response.json())
 # Output: {"document_id": "...", "status": "pending", ...}
+
+# Batch upload (up to 5 files)
+files = [
+    ("files", open("doc1.pdf", "rb")),
+    ("files", open("doc2.pdf", "rb")),
+]
+response = requests.post(
+    "http://localhost:8080/api/documents/upload/batch",
+    files=files,
+    data={"collection_name": "batch_docs"}
+)
 ```
 
 ### Query Documents
@@ -252,6 +320,73 @@ async with httpx.AsyncClient() as client:
             print(chunk, end="", flush=True)
 ```
 
+### Document Management
+
+```python
+# List all documents
+response = requests.get("http://localhost:8080/api/documents/list")
+documents = response.json()
+
+# Get document progress
+doc_id = "abc123"
+response = requests.get(f"http://localhost:8080/api/documents/progress/{doc_id}")
+progress = response.json()
+print(f"Status: {progress['status']}, Progress: {progress['progress']}%")
+
+# Delete document
+requests.delete(f"http://localhost:8080/api/documents/{doc_id}")
+```
+
+## 📊 Monitoring & Observability
+
+TextReadingRAG includes **production-grade monitoring** with Prometheus and Grafana.
+
+### Features
+- **30+ Metrics**: HTTP requests, RAG pipeline performance, resource usage
+- **Pre-built Dashboard**: 16 panels covering all aspects of the system
+- **30+ Alert Rules**: Critical alerts for API, RAG components, and infrastructure
+- **Exporters**: Redis, Node, cAdvisor for complete observability
+
+### Quick Start Monitoring
+
+```bash
+# Start monitoring stack
+docker-compose --profile monitoring up -d
+
+# Access interfaces
+# Grafana: http://localhost:3000 (admin/admin)
+# Prometheus: http://localhost:9090
+# Metrics: http://localhost:8080/metrics
+```
+
+### Key Metrics
+
+| Metric | Description |
+|--------|-------------|
+| `http_requests_total` | Total HTTP requests by endpoint, method, status |
+| `http_request_duration_seconds` | Request latency distribution |
+| `rag_retrieval_duration_seconds` | Document retrieval performance |
+| `rag_reranking_duration_seconds` | Reranking stage latency |
+| `rag_generation_duration_seconds` | LLM response generation time |
+| `rag_retrieval_quality_score` | Quality of retrieved documents |
+| `rag_documents_indexed_total` | Total documents processed |
+| `rag_query_expansion_errors_total` | Query expansion failures |
+
+### Sample Queries
+
+```promql
+# API request rate
+rate(http_requests_total{job="textreadingrag-api"}[5m])
+
+# P95 retrieval latency
+histogram_quantile(0.95, rate(rag_retrieval_duration_seconds_bucket[5m]))
+
+# Error rate by component
+sum(rate(rag_retrieval_errors_total[5m])) by (error_type)
+```
+
+📖 **Full Documentation**: [Monitoring Guide](docs/MONITORING.md) | [Quick Start](MONITORING_QUICKSTART.md)
+
 ## ⚙️ Configuration
 
 ### Environment Variables
@@ -263,7 +398,8 @@ async with httpx.AsyncClient() as client:
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model |
 | `CHROMA_HOST` | `localhost` | ChromaDB host |
 | `CHROMA_PORT` | `8000` | ChromaDB port |
-| `CHUNK_SIZE` | `512` | Text chunk size for documents |
+| `CHUNK_SIZE` | `512` | Text chunk size for documents (English) |
+| `CHINESE_CHUNK_SIZE` | `256` | Text chunk size for Chinese documents |
 | `CHUNK_OVERLAP` | `128` | Overlap between chunks |
 | `DENSE_TOP_K` | `10` | Top-k for dense retrieval |
 | `SPARSE_TOP_K` | `10` | Top-k for sparse retrieval |
@@ -271,6 +407,7 @@ async with httpx.AsyncClient() as client:
 | `RERANK_TOP_N` | `3` | Number of documents to rerank |
 | `MAX_FILE_SIZE` | `50` | Maximum upload size (MB) |
 | `ENABLE_CACHE` | `false` | Enable Redis caching |
+| `ENABLE_LANGUAGE_DETECTION` | `true` | Auto-detect document language |
 
 ### RAG Strategy Configuration
 
@@ -290,6 +427,11 @@ MAX_EXPANDED_QUERIES = 3
 RERANK_MODEL = "BAAI/bge-reranker-large"  # Options: bge-*, sentence-transformer, llm-rerank
 RERANK_TOP_N = 3
 USE_LLM_RERANK = True
+
+# Chinese Language
+SUPPORTED_LANGUAGES = ["en", "zh"]
+CHINESE_CHUNK_SIZE = 256
+CHINESE_CHUNK_OVERLAP = 64
 ```
 
 ## 🐳 Docker Deployment
@@ -297,47 +439,51 @@ USE_LLM_RERANK = True
 ### Development Mode
 
 ```bash
-# Start all services for development
+# Start core services
 docker-compose up -d
 
 # View logs
 docker-compose logs -f chromadb
 ```
 
-### Production Mode
+### Production Mode with Monitoring
 
 ```bash
-# Start with production profile (includes Nginx)
-docker-compose --profile production up -d
+# Start full stack with monitoring
+docker-compose --profile monitoring up -d
+
+# Check all services
+docker-compose ps
+
+# View Grafana dashboard
+open http://localhost:3000
+```
+
+### Full Stack (API + Monitoring)
+
+```bash
+# Start everything including containerized API
+docker-compose --profile full-stack --profile monitoring up -d
 
 # Scale API instances
 docker-compose --profile full-stack up -d --scale api=3
 ```
 
-### Custom Configuration
+### Available Services
 
-```yaml
-# docker-compose.override.yml
-version: '3.8'
-services:
-  chromadb:
-    environment:
-      - CHROMA_LOG_LEVEL=INFO
-    volumes:
-      - /host/path/chroma:/chroma/chroma
+| Service | Port | Profile | Description |
+|---------|------|---------|-------------|
+| ChromaDB | 8000 | default | Vector database |
+| Redis | 6379 | default | Optional cache |
+| API | 8080 | full-stack | FastAPI application |
+| Prometheus | 9090 | monitoring | Metrics collection |
+| Grafana | 3000 | monitoring | Visualization |
+| Redis Exporter | 9121 | monitoring | Redis metrics |
+| Node Exporter | 9100 | monitoring | System metrics |
+| cAdvisor | 8081 | monitoring | Container metrics |
+| Nginx | 80/443 | production | Reverse proxy |
 
-  api:
-    environment:
-      - WORKERS=4
-      - LOG_LEVEL=INFO
-    deploy:
-      replicas: 2
-      resources:
-        limits:
-          memory: 2G
-```
-
-## 📊 Performance Optimization
+## 📈 Performance Optimization
 
 ### Retrieval Tuning
 
@@ -373,6 +519,10 @@ CHUNK_OVERLAP = 256
 # For dense reference material
 CHUNK_SIZE = 256
 CHUNK_OVERLAP = 64
+
+# For Chinese documents (automatic)
+CHINESE_CHUNK_SIZE = 256
+CHINESE_CHUNK_OVERLAP = 64
 ```
 
 ### Caching Configuration
@@ -383,61 +533,30 @@ ENABLE_CACHE=true
 CACHE_TTL=3600  # 1 hour
 ```
 
-## 🔧 Advanced Features
+## 🧪 Testing
 
-### Custom Reranking Ensemble
+### Run Tests
 
-```python
-# Configure ensemble reranking
-rerankers = [
-    ("bge", CrossEncoderReranker("BAAI/bge-reranker-large"), 0.7),
-    ("llm", LLMReranker(), 0.3)
-]
+```bash
+# All tests
+pytest tests/ -v
 
-ensemble = EnsembleReranker(
-    rerankers=rerankers,
-    fusion_method="weighted_average"
-)
+# Specific test suites
+pytest tests/test_api/ -v              # API tests
+pytest tests/test_rag/ -v              # RAG component tests
+pytest tests/test_rag/test_chinese_support.py -v  # Chinese language tests
+
+# With coverage
+pytest --cov=src tests/
 ```
 
-### Query Strategy Selection
+### Test Coverage
 
-```python
-def get_optimal_strategy(query: str) -> dict:
-    """Auto-select best retrieval strategy based on query."""
-
-    query_lower = query.lower()
-
-    if any(word in query_lower for word in ["what is", "define", "definition"]):
-        # Factual queries - favor BM25
-        return {"alpha": 0.2, "strategy": "hybrid"}
-
-    elif len(query.split()) > 10:
-        # Complex queries - favor semantic
-        return {"alpha": 0.8, "strategy": "hybrid"}
-
-    else:
-        # Balanced approach
-        return {"alpha": 0.5, "strategy": "hybrid"}
-```
-
-### Custom Prompt Templates
-
-```python
-# Domain-specific prompt template
-RESEARCH_PROMPT = """
-Based on the provided research context, answer the question with:
-1. Direct answer
-2. Supporting evidence
-3. Confidence level
-4. Limitations
-
-Context: {context}
-Question: {question}
-
-Answer:
-"""
-```
+- ✅ API endpoint tests (query, document upload, batch processing)
+- ✅ RAG pipeline tests (retrieval, reranking, query expansion)
+- ✅ Chinese language support tests (detection, tokenization)
+- ✅ Document processing tests
+- ✅ Error handling tests
 
 ## 🛠️ Development
 
@@ -446,10 +565,7 @@ Answer:
 ```bash
 # Install development dependencies
 pip install -e .
-pip install pytest pytest-asyncio black isort mypy
-
-# Run tests
-pytest tests/ -v
+pip install pytest pytest-asyncio pytest-mock black isort mypy
 
 # Code formatting
 black src/
@@ -459,30 +575,17 @@ isort src/
 mypy src/
 ```
 
-### Running Tests
+## 📚 Documentation
 
-```bash
-# Unit tests
-pytest tests/unit/ -v
-
-# Integration tests
-pytest tests/integration/ -v
-
-# End-to-end tests
-pytest tests/e2e/ -v
-
-# With coverage
-pytest --cov=src tests/
-```
-
-### Contributing
-
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Follow coding standards**: Use black, isort, and mypy
-4. **Write tests**: Maintain >90% test coverage
-5. **Update documentation**: Keep README and docstrings current
-6. **Submit a pull request**: Include detailed description
+| Document | Description |
+|----------|-------------|
+| [README.md](README.md) | Main project documentation (this file) |
+| [CHINESE_SUPPORT.md](docs/CHINESE_SUPPORT.md) | Chinese language features guide |
+| [CHINESE_QUICK_START.md](docs/CHINESE_QUICK_START.md) | Chinese quick start guide |
+| [MONITORING.md](docs/MONITORING.md) | Monitoring setup and metrics guide |
+| [MONITORING_QUICKSTART.md](MONITORING_QUICKSTART.md) | Quick monitoring setup |
+| [PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md) | Production deployment guide |
+| [API Documentation](http://localhost:8080/docs) | Interactive API docs (when server running) |
 
 ## 🐛 Troubleshooting
 
@@ -519,64 +622,28 @@ curl -H "Authorization: Bearer $OPENAI_API_KEY" \
 docker stats
 ```
 
-**PDF Processing Failures**
+**Chinese Text Not Processing Correctly**
 ```bash
-# Check file permissions
-chmod 644 uploads/*.pdf
+# Ensure jieba is installed
+pip install jieba
 
-# Verify file format
-file uploads/document.pdf
-
-# Enable debug logging
-LOG_LEVEL=DEBUG python -m uvicorn src.api.main:app
-```
-
-### Performance Debugging
-
-```python
-# Enable detailed timing
-import time
-
-start = time.time()
-result = await query_documents(request)
-print(f"Total time: {time.time() - start:.2f}s")
-
-# Check component timing
-print(f"Retrieval: {result.retrieval_time_ms}ms")
-print(f"Reranking: {result.reranking_time_ms}ms")
-print(f"Generation: {result.generation_time_ms}ms")
-```
-
-## 📈 Monitoring & Observability
-
-### Health Checks
-
-```bash
-# API health
-curl http://localhost:8080/health
-
-# Detailed health check
-curl http://localhost:8080/health/detailed
-
-# ChromaDB health
-curl http://localhost:8000/api/v1/heartbeat
-```
-
-### Metrics Collection
-
-```python
-# Custom metrics endpoint
-@app.get("/metrics")
-async def get_metrics():
-    return {
-        "queries_per_minute": query_counter.rate(),
-        "avg_response_time": response_timer.average(),
-        "error_rate": error_counter.rate(),
-        "active_connections": connection_gauge.value()
-    }
+# Check language detection
+python -c "from src.rag.language_utils import detect_language; print(detect_language('這是中文'))"
 ```
 
 ## 🔮 Roadmap
+
+### Completed Features
+- ✅ Hybrid retrieval (dense + sparse)
+- ✅ Multi-model reranking
+- ✅ Query expansion (LLM + Synonym + HyDE)
+- ✅ Chinese language support
+- ✅ Prometheus + Grafana monitoring
+- ✅ Comprehensive testing
+- ✅ Production deployment guide
+- ✅ Batch processing
+- ✅ Streaming responses
+- ✅ Document comparison
 
 ### Upcoming Features
 - [ ] **Multi-modal Support**: Images, tables, and charts in PDFs
@@ -588,12 +655,6 @@ async def get_metrics():
 - [ ] **WebSocket Support**: Real-time collaborative queries
 - [ ] **Export Features**: Query results to various formats
 
-### Performance Goals
-- [ ] **Sub-100ms** retrieval for cached queries
-- [ ] **1000+ QPS** throughput with horizontal scaling
-- [ ] **99.9%** uptime with proper deployment
-- [ ] **<1GB** memory usage per API instance
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -601,8 +662,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🤝 Support
 
 - **Documentation**: [API Docs](http://localhost:8080/docs)
-- **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-repo/discussions)
+- **Issues**: [GitHub Issues](https://github.com/jaujye/TextReadingRAG/issues)
+- **Repository**: [GitHub](https://github.com/jaujye/TextReadingRAG)
 
 ## 🙏 Acknowledgments
 
@@ -611,9 +672,20 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **OpenAI**: Powerful embedding and language models
 - **FastAPI**: Modern, fast web framework for APIs
 - **Hugging Face**: Pre-trained reranking models
+- **Prometheus & Grafana**: Outstanding monitoring tools
+- **jieba**: Excellent Chinese text segmentation
 
 ---
 
 **Built with ❤️ for the AI community**
 
 *Ready to revolutionize how you interact with documents? Get started now!*
+
+## 🚦 Quick Links
+
+- 📖 [API Documentation](http://localhost:8080/docs) - Interactive API reference
+- 🇨🇳 [Chinese Support Guide](docs/CHINESE_SUPPORT.md) - Chinese language features
+- 📊 [Monitoring Guide](docs/MONITORING.md) - Prometheus + Grafana setup
+- 🚀 [Production Deployment](docs/PRODUCTION_DEPLOYMENT.md) - Production deployment
+- 🧪 [Run Tests](tests/) - Comprehensive test suite
+- 📈 [Grafana Dashboard](http://localhost:3000) - Real-time monitoring
