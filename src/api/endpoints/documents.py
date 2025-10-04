@@ -40,6 +40,7 @@ from src.core.dependencies import (
     get_settings_dependency,
     get_document_ingestion_service,
     get_vector_store_client,
+    get_cache_service,
     validate_file_upload,
 )
 from src.core.exceptions import (
@@ -76,6 +77,7 @@ async def upload_document(
     metadata: Optional[str] = Form(None, description="JSON metadata string"),
     settings: Settings = Depends(get_settings_dependency),
     ingestion_service: DocumentIngestionService = Depends(get_document_ingestion_service),
+    cache_service = Depends(get_cache_service),
     _: bool = Depends(validate_file_upload),
 ) -> DocumentUploadResponse:
     """Upload and process a single document."""
@@ -136,6 +138,7 @@ async def upload_document(
             collection_name=collection_name,
             processing_options=processing_options,
             ingestion_service=ingestion_service,
+            cache_service=cache_service,
         )
 
         logger.info(f"Document upload initiated: {document_id} - {file.filename}")
@@ -167,6 +170,7 @@ async def upload_documents_batch(
     parallel_processing: bool = Form(True, description="Process files in parallel"),
     settings: Settings = Depends(get_settings_dependency),
     ingestion_service: DocumentIngestionService = Depends(get_document_ingestion_service),
+    cache_service = Depends(get_cache_service),
     _: bool = Depends(validate_file_upload),
 ) -> BatchUploadResponse:
     """Upload and process multiple documents in batch."""
@@ -233,6 +237,7 @@ async def upload_documents_batch(
                     collection_name=collection_name,
                     processing_options=processing_options,
                     ingestion_service=ingestion_service,
+                    cache_service=cache_service,
                 )
 
             except Exception as e:
@@ -710,6 +715,7 @@ async def process_document_background(
     collection_name: Optional[str],
     processing_options: Dict[str, Any],
     ingestion_service: DocumentIngestionService,
+    cache_service=None,
 ) -> None:
     """Background task for document processing."""
     try:
@@ -747,6 +753,14 @@ async def process_document_background(
             "current_stage": "indexing",
             "stages_completed": ["loading_document", "processing_document"],
         })
+
+        # Invalidate cache for this collection
+        if cache_service and collection_name:
+            try:
+                deleted = await cache_service.invalidate_collection(collection_name)
+                logger.info(f"Cache invalidated for collection '{collection_name}': {deleted} keys")
+            except Exception as e:
+                logger.warning(f"Failed to invalidate cache: {e}")
 
         # Complete
         processing_jobs[document_id].update({

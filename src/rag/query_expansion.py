@@ -438,15 +438,17 @@ Document 3:
 class QueryExpansionService:
     """Main service for query expansion."""
 
-    def __init__(self, settings: Settings, llm: Optional[LLM] = None):
+    def __init__(self, settings: Settings, llm: Optional[LLM] = None, cache_service=None):
         """
         Initialize query expansion service.
 
         Args:
             settings: Application settings
             llm: Language model instance
+            cache_service: Optional cache service
         """
         self.settings = settings
+        self.cache = cache_service
 
         # Initialize LLM
         if llm:
@@ -503,6 +505,14 @@ class QueryExpansionService:
                     for method in self.settings.rag.query_expansion_methods
                 ]
 
+            # Try to get cached expansion results
+            method_names = [m.value for m in methods]
+            if self.cache:
+                cached_results = await self.cache.get_query_expansion(query, method_names)
+                if cached_results:
+                    logger.debug(f"Cache hit for query expansion: {query}")
+                    return cached_results
+
             results = {"original": [query]}
 
             # Apply each expansion method
@@ -547,6 +557,10 @@ class QueryExpansionService:
             if len(total_expansions) > max_total:
                 # Keep original and best expansions
                 results["truncated"] = True
+
+            # Cache the expansion results
+            if self.cache:
+                await self.cache.set_query_expansion(query, method_names, results)
 
             logger.info(f"Query expansion generated {len(total_expansions)} total expansions")
             return results

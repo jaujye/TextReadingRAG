@@ -71,6 +71,7 @@ class DenseRetriever:
         vector_store: ChromaVectorStore,
         embedding_model: OpenAIEmbedding,
         settings: Settings,
+        cache_service=None,
     ):
         """
         Initialize dense retriever.
@@ -79,10 +80,12 @@ class DenseRetriever:
             vector_store: Vector store instance
             embedding_model: Embedding model for query encoding
             settings: Application settings
+            cache_service: Optional cache service for embeddings
         """
         self.vector_store = vector_store
         self.embedding_model = embedding_model
         self.settings = settings
+        self.cache = cache_service
 
     async def retrieve(
         self,
@@ -104,12 +107,24 @@ class DenseRetriever:
             List of retrieved nodes with scores
         """
         try:
-            # Generate query embedding
-            if self.settings.app.mock_embeddings:
-                import numpy as np
-                query_embedding = np.random.rand(self.settings.rag.embedding_dimension).tolist()
-            else:
-                query_embedding = self.embedding_model.get_query_embedding(query)
+            # Try to get cached embedding
+            query_embedding = None
+            if self.cache and not self.settings.app.mock_embeddings:
+                model_name = self.settings.llm.openai_embedding_model
+                query_embedding = await self.cache.get_embedding(query, model_name)
+
+            # Generate query embedding if not cached
+            if query_embedding is None:
+                if self.settings.app.mock_embeddings:
+                    import numpy as np
+                    query_embedding = np.random.rand(self.settings.rag.embedding_dimension).tolist()
+                else:
+                    query_embedding = self.embedding_model.get_query_embedding(query)
+
+                    # Cache the embedding
+                    if self.cache:
+                        model_name = self.settings.llm.openai_embedding_model
+                        await self.cache.set_embedding(query, model_name, query_embedding)
 
             # Create vector store query
             vector_query = VectorStoreQuery(
@@ -381,6 +396,7 @@ class HybridRetrievalService:
         vector_store: ChromaVectorStore,
         settings: Settings,
         embedding_model: Optional[OpenAIEmbedding] = None,
+        cache_service=None,
     ):
         """
         Initialize hybrid retrieval service.
@@ -389,9 +405,11 @@ class HybridRetrievalService:
             vector_store: Vector store instance
             settings: Application settings
             embedding_model: Embedding model
+            cache_service: Optional cache service
         """
         self.vector_store = vector_store
         self.settings = settings
+        self.cache = cache_service
 
         # Initialize embedding model
         if embedding_model:
@@ -408,11 +426,12 @@ class HybridRetrievalService:
                 logger.warning("Using mock embeddings for development")
                 self.embedding_model = None
 
-        # Initialize retrievers
+        # Initialize retrievers with cache
         self.dense_retriever = DenseRetriever(
             vector_store=vector_store,
             embedding_model=self.embedding_model,
             settings=settings,
+            cache_service=cache_service,
         )
         self.sparse_retriever = SparseRetriever(settings=settings)
 

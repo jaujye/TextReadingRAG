@@ -65,9 +65,59 @@ async def get_document_ingestion_service(
         raise ConfigurationError(f"Failed to initialize ingestion service: {e}")
 
 
+# Global Redis connection pool
+_redis_pool: Optional[Any] = None
+
+
+async def get_cache_client(
+    settings: Settings = Depends(get_settings_dependency),
+):
+    """
+    Get Redis cache client from connection pool.
+
+    Returns None if caching is disabled.
+    """
+    if not settings.app.enable_cache:
+        return None
+
+    global _redis_pool
+    if _redis_pool is None:
+        try:
+            import redis.asyncio as redis
+            _redis_pool = redis.Redis(
+                host=settings.app.redis_host,
+                port=settings.app.redis_port,
+                db=settings.app.redis_db,
+                password=settings.app.redis_password,
+                decode_responses=True,
+            )
+        except ImportError:
+            logger.warning("Redis not available. Caching disabled.")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to connect to Redis: {e}")
+            return None
+
+    return _redis_pool
+
+
+async def get_cache_service(
+    settings: Settings = Depends(get_settings_dependency),
+    redis_client = Depends(get_cache_client),
+):
+    """
+    Get cache service instance.
+
+    Returns a CacheService that gracefully handles disabled state.
+    """
+    from src.core.cache import CacheService
+    return CacheService(redis_client=redis_client, settings=settings)
+
+
 async def get_retrieval_service(
     settings: Settings = Depends(get_settings_dependency),
     vector_store = Depends(get_vector_store_client),
+    cache_service = Depends(get_cache_service),
 ):
     """
     Get hybrid retrieval service.
@@ -81,6 +131,7 @@ async def get_retrieval_service(
         return HybridRetrievalService(
             vector_store=vector_store,
             settings=settings,
+            cache_service=cache_service,
         )
     except Exception as e:
         logger.error(f"Failed to initialize retrieval service: {e}")
@@ -107,6 +158,7 @@ async def get_reranking_service(
 
 async def get_query_expansion_service(
     settings: Settings = Depends(get_settings_dependency),
+    cache_service = Depends(get_cache_service),
 ):
     """
     Get query expansion service.
@@ -117,7 +169,7 @@ async def get_query_expansion_service(
         # Import here to avoid circular imports
         from src.rag.query_expansion import QueryExpansionService
 
-        return QueryExpansionService(settings=settings)
+        return QueryExpansionService(settings=settings, cache_service=cache_service)
     except Exception as e:
         logger.error(f"Failed to initialize query expansion service: {e}")
         raise ConfigurationError(f"Failed to initialize query expansion service: {e}")
@@ -162,42 +214,6 @@ async def validate_openai_config(
             )
 
     return True
-
-
-# Global Redis connection pool
-_redis_pool: Optional[Any] = None
-
-
-async def get_cache_client(
-    settings: Settings = Depends(get_settings_dependency),
-):
-    """
-    Get Redis cache client from connection pool.
-
-    Returns None if caching is disabled.
-    """
-    if not settings.app.enable_cache:
-        return None
-
-    global _redis_pool
-    if _redis_pool is None:
-        try:
-            import redis.asyncio as redis
-            _redis_pool = redis.Redis(
-                host=settings.app.redis_host,
-                port=settings.app.redis_port,
-                db=settings.app.redis_db,
-                password=settings.app.redis_password,
-                decode_responses=True,
-            )
-        except ImportError:
-            logger.warning("Redis not available. Caching disabled.")
-            return None
-        except Exception as e:
-            logger.error(f"Failed to connect to Redis: {e}")
-            return None
-
-    return _redis_pool
 
 
 async def lifespan_context() -> AsyncGenerator[None, None]:

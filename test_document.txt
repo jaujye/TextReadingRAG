@@ -1,0 +1,14 @@
+Test Document for RAG System
+
+This is a test document for the TextReadingRAG system.
+It contains sample text to test document upload and query functionality.
+The system should be able to extract this text and use it for retrieval-augmented generation.
+
+Key features to test:
+- Document upload functionality
+- Text extraction from uploaded documents
+- Vector embedding generation
+- Semantic search and retrieval
+- Query answering with context
+
+This document contains enough text to properly test the RAG pipeline.

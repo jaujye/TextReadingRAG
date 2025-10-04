@@ -10,7 +10,7 @@ import traceback
 from contextlib import asynccontextmanager
 from typing import Dict, Any
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.exceptions import RequestValidationError
@@ -20,7 +20,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 from src.core.config import get_settings
 from src.core import metrics as rag_metrics
-from src.core.dependencies import lifespan_context
+from src.core.dependencies import lifespan_context, get_cache_service
 from src.core.exceptions import (
     TextReadingRAGException,
     ConfigurationError,
@@ -233,7 +233,9 @@ async def health_check() -> Dict[str, Any]:
 
 
 @app.get("/health/detailed", tags=["Health"])
-async def detailed_health_check() -> Dict[str, Any]:
+async def detailed_health_check(
+    cache_service = Depends(get_cache_service),
+) -> Dict[str, Any]:
     """Detailed health check with component status."""
     health_status = {
         "status": "healthy",
@@ -258,12 +260,22 @@ async def detailed_health_check() -> Dict[str, Any]:
         "persist_directory": settings.rag.chroma_persist_directory,
     }
 
-    # Check cache configuration
-    health_status["components"]["cache"] = {
+    # Check cache configuration and get stats
+    cache_config = {
         "status": "enabled" if settings.app.enable_cache else "disabled",
         "enabled": settings.app.enable_cache,
         "redis_host": settings.app.redis_host if settings.app.enable_cache else None,
     }
+
+    # Get cache stats if enabled
+    if cache_service and cache_service.enabled:
+        try:
+            stats = await cache_service.get_stats()
+            cache_config.update(stats)
+        except Exception as e:
+            cache_config["stats_error"] = str(e)
+
+    health_status["components"]["cache"] = cache_config
 
     # Check file upload configuration
     health_status["components"]["file_upload"] = {

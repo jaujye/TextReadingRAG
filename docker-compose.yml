@@ -3,26 +3,27 @@ version: '3.8'
 services:
   # ChromaDB Vector Database
   chromadb:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:0.4.24
     container_name: textreadingrag-chromadb
     ports:
-      - "8000:8000"
+      - "7999:8000"
     environment:
       - CHROMA_HOST=0.0.0.0
       - CHROMA_PORT=8000
       - CHROMA_LOG_LEVEL=INFO
       - ANONYMIZED_TELEMETRY=False
+      - IS_PERSISTENT=TRUE
+      - ALLOW_RESET=TRUE
     volumes:
-      - chromadb_data:/chroma/chroma
-      - ./data/chroma_db:/chroma/chroma:rw
+      - ./data/chroma_db:/chroma/chroma
     networks:
       - textreadingrag-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
-      interval: 30s
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
+      interval: 10s
       timeout: 10s
-      retries: 5
+      retries: 3
       start_period: 30s
     logging:
       driver: "json-file"
@@ -92,6 +93,7 @@ services:
       - CHROMA_PORT=8000
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - ENABLE_CACHE=True
       - DEBUG=False
       - LOG_LEVEL=INFO
     env_file:
