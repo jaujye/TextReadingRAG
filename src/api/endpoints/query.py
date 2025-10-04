@@ -109,7 +109,8 @@ async def query_documents(
         if expanded_queries:
             # Add expanded queries
             for method_queries in expanded_queries.values():
-                if method_queries and method_queries != [request.query]:
+                # Skip non-list values like "truncated" boolean flag
+                if isinstance(method_queries, list) and method_queries and method_queries != [request.query]:
                     queries_to_search.extend(method_queries[:2])  # Limit expanded queries
 
         # Step 2: Retrieval
@@ -230,7 +231,8 @@ Please provide a comprehensive answer based on the context provided. If the cont
         expanded_query_list = []
         if expanded_queries:
             for method, queries in expanded_queries.items():
-                if method != "original" and queries:
+                # Skip non-list values like "truncated" boolean flag
+                if method != "original" and isinstance(queries, list) and queries:
                     expanded_query_list.extend(queries)
 
         # Create response

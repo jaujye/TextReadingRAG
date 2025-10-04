@@ -164,13 +164,17 @@ class SparseRetriever:
         """Get or create BM25 retriever with multilingual tokenization support."""
         if collection_name not in self._bm25_retrievers:
             try:
+                # Adjust top_k to not exceed corpus size
+                corpus_size = len(nodes)
+                top_k = min(self.settings.rag.sparse_top_k, corpus_size) if corpus_size > 0 else 1
+
                 retriever = BM25Retriever.from_defaults(
                     nodes=nodes,
-                    similarity_top_k=self.settings.rag.sparse_top_k,
+                    similarity_top_k=top_k,
                     tokenizer=multilingual_tokenizer,
                 )
                 self._bm25_retrievers[collection_name] = retriever
-                logger.info(f"Created BM25 retriever with multilingual tokenizer for collection: {collection_name}")
+                logger.info(f"Created BM25 retriever with multilingual tokenizer for collection: {collection_name} (corpus_size={corpus_size}, top_k={top_k})")
             except Exception as e:
                 logger.error(f"Failed to create BM25 retriever: {e}")
                 raise RetrievalError(f"Failed to create BM25 retriever: {e}")
@@ -520,6 +524,8 @@ class HybridRetrievalService:
     ) -> List[NodeWithScore]:
         """Execute hybrid retrieval combining dense and sparse methods."""
         try:
+            logger.info(f"Starting hybrid retrieval for query: '{query}' in collection: '{collection_name}'")
+
             # Execute both retrievals in parallel
             dense_task = self.dense_retriever.retrieve(
                 query=query,
@@ -570,19 +576,43 @@ class HybridRetrievalService:
     ) -> List[BaseNode]:
         """Get all nodes from the corpus for BM25 retrieval."""
         try:
-            # For now, we'll retrieve a large number of nodes to build the BM25 index
-            # In production, you might want to implement a more efficient approach
-            vector_query = VectorStoreQuery(
-                query_str="",  # Empty query to get all documents
-                similarity_top_k=10000,  # Large number to get most documents
-                filters=filters,
-            )
+            # Use ChromaDB's get() method to retrieve all documents efficiently
+            collection = self.vector_store.get_collection(collection_name, create_if_not_exists=False)
 
-            result = self.vector_store.query(vector_query, collection_name=collection_name)
-            return result.nodes
+            # Build get parameters
+            get_params = {
+                "limit": 10000,
+                "include": ["documents", "metadatas"],
+            }
+
+            # Add metadata filters if provided
+            if filters:
+                where_clause = self.vector_store._build_where_clause(filters)
+                if where_clause:
+                    get_params["where"] = where_clause
+
+            # Get all documents
+            results = collection.get(**get_params)
+
+            # Convert to BaseNode objects
+            nodes = []
+            if results and "ids" in results and results["ids"]:
+                for i, node_id in enumerate(results["ids"]):
+                    document = results["documents"][i] if results.get("documents") and i < len(results["documents"]) else ""
+                    metadata = results["metadatas"][i] if results.get("metadatas") and i < len(results["metadatas"]) else {}
+
+                    node = TextNode(
+                        id_=node_id,
+                        text=document,
+                        metadata=metadata,
+                    )
+                    nodes.append(node)
+
+            logger.info(f"Retrieved {len(nodes)} corpus nodes for BM25 indexing from collection '{collection_name}'")
+            return nodes
 
         except Exception as e:
-            logger.error(f"Failed to get corpus nodes: {e}")
+            logger.error(f"Failed to get corpus nodes: {e}", exc_info=True)
             raise RetrievalError(f"Failed to get corpus nodes: {e}")
 
     def _determine_auto_mode(self, query: str) -> RetrievalMode:

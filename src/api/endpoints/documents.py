@@ -317,7 +317,7 @@ async def list_documents(
 ) -> List[DocumentInfo]:
     """List documents with optional filtering."""
     try:
-        collection_name = collection_name or settings.chroma.chroma_collection_name
+        collection_name = collection_name or settings.rag.chroma_collection_name
 
         # Get documents from vector store
         # This is a simplified implementation - in production you might want a proper document index
@@ -376,7 +376,7 @@ async def get_document(
 ) -> DocumentInfo:
     """Get detailed information about a document."""
     try:
-        collection_name = collection_name or settings.chroma.chroma_collection_name
+        collection_name = collection_name or settings.rag.chroma_collection_name
 
         # Search for document by ID
         search_results = vector_store.search_by_metadata(
@@ -435,7 +435,7 @@ async def update_document(
 ) -> DocumentInfo:
     """Update document metadata or reprocess."""
     try:
-        collection_name = collection_name or settings.chroma.chroma_collection_name
+        collection_name = collection_name or settings.rag.chroma_collection_name
 
         # Check if document exists
         search_results = vector_store.search_by_metadata(
@@ -530,7 +530,7 @@ async def delete_document(
 ) -> JSONResponse:
     """Delete a document and its associated data."""
     try:
-        collection_name = collection_name or settings.chroma.chroma_collection_name
+        collection_name = collection_name or settings.rag.chroma_collection_name
 
         # Check if document exists
         search_results = vector_store.search_by_metadata(
