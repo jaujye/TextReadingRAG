@@ -231,7 +231,7 @@ class DocumentLoader:
                 raise FileProcessingError(f"File not found: {file_path}")
 
             # Extract base metadata
-            metadata = self.loader.processor.extract_document_metadata(
+            metadata = self.processor.extract_document_metadata(
                 str(file_path),
                 additional_metadata,
             )

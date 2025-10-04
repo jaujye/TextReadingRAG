@@ -55,24 +55,28 @@ class ChromaVectorStore(VectorStore):
 
         # Initialize ChromaDB client
         try:
-            if persist_directory:
-                self.client = chromadb.PersistentClient(
+            # Use PersistentClient only for localhost with persist_directory
+            # Use HttpClient for remote connections
+            is_local = host in ["localhost", "127.0.0.1", "0.0.0.0"]
+
+            if persist_directory and is_local:
+                self._client = chromadb.PersistentClient(
                     path=persist_directory,
                     settings=ChromaSettings(
                         anonymized_telemetry=False,
                         allow_reset=True,
                     ),
                 )
+                logger.info(f"Using PersistentClient at {persist_directory}")
             else:
-                self.client = chromadb.HttpClient(
+                self._client = chromadb.HttpClient(
                     host=host,
                     port=port,
                     settings=ChromaSettings(
                         anonymized_telemetry=False,
                     ),
                 )
-
-            logger.info(f"Connected to ChromaDB at {host}:{port}")
+                logger.info(f"Using HttpClient to connect to {host}:{port}")
 
         except Exception as e:
             logger.error(f"Failed to connect to ChromaDB: {e}")
@@ -94,6 +98,11 @@ class ChromaVectorStore(VectorStore):
 
         # Collection cache
         self._collections: Dict[str, Any] = {}
+
+    @property
+    def client(self):
+        """Get ChromaDB client."""
+        return self._client
 
     def get_collection(
         self,
@@ -117,13 +126,13 @@ class ChromaVectorStore(VectorStore):
 
         try:
             if create_if_not_exists:
-                collection = self.client.get_or_create_collection(
+                collection = self._client.get_or_create_collection(
                     name=name,
                     embedding_function=self.embedding_function,
                     metadata={"created_at": datetime.utcnow().isoformat()},
                 )
             else:
-                collection = self.client.get_collection(
+                collection = self._client.get_collection(
                     name=name,
                     embedding_function=self.embedding_function,
                 )
@@ -437,7 +446,7 @@ class ChromaVectorStore(VectorStore):
             List of collection names
         """
         try:
-            collections = self.client.list_collections()
+            collections = self._client.list_collections()
             return [col.name for col in collections]
 
         except Exception as e:
@@ -463,7 +472,7 @@ class ChromaVectorStore(VectorStore):
             collection_metadata = metadata or {}
             collection_metadata["created_at"] = datetime.utcnow().isoformat()
 
-            collection = self.client.create_collection(
+            collection = self._client.create_collection(
                 name=name,
                 embedding_function=self.embedding_function,
                 metadata=collection_metadata,
@@ -488,7 +497,7 @@ class ChromaVectorStore(VectorStore):
             True if successful
         """
         try:
-            self.client.delete_collection(name=name)
+            self._client.delete_collection(name=name)
 
             # Remove from cache
             if name in self._collections:
