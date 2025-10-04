@@ -22,13 +22,31 @@ def detect_language(text: str) -> str:
     if not text or not text.strip():
         return settings.rag.default_language
 
+    # For longer texts, use character-based detection (more reliable)
+    # For shorter texts, use langdetect
+    text_length = len([c for c in text if not c.isspace()])
+
+    if text_length >= 50:
+        # Longer text: prioritize character-based detection
+        if is_chinese(text):
+            return 'zh'
+
+    # Use langdetect as primary or fallback method
     try:
         lang = detect(text)
         # Map langdetect codes to our supported languages
-        if lang.startswith('zh'):
-            return 'zh'
-        return 'en' if lang == 'en' else settings.rag.default_language
+        if lang.startswith('zh') or lang == 'ko':  # langdetect sometimes confuses Chinese with Korean
+            # Double-check with character pattern
+            if is_chinese(text):
+                return 'zh'
+        if lang == 'en':
+            return 'en'
+        # For other languages, return default
+        return settings.rag.default_language
     except LangDetectException:
+        # If langdetect fails, try character-based detection
+        if is_chinese(text):
+            return 'zh'
         return settings.rag.default_language
 
 
@@ -45,8 +63,11 @@ def is_chinese(text: str) -> bool:
     if not text:
         return False
 
-    # Count CJK characters
-    cjk_pattern = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df]')
+    # Count CJK characters (Common Chinese ranges)
+    # \u4e00-\u9fff: CJK Unified Ideographs
+    # \u3400-\u4dbf: CJK Extension A
+    # \uf900-\ufaff: CJK Compatibility Ideographs
+    cjk_pattern = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]')
     cjk_chars = len(cjk_pattern.findall(text))
     total_chars = len([c for c in text if not c.isspace()])
 
