@@ -8,8 +8,14 @@ A state-of-the-art Retrieval-Augmented Generation (RAG) system designed for proc
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-green.svg)](https://fastapi.tiangolo.com/)
 [![LlamaIndex](https://img.shields.io/badge/LlamaIndex-0.10+-purple.svg)](https://llamaindex.ai/)
 [![ChromaDB](https://img.shields.io/badge/ChromaDB-0.4+-orange.svg)](https://www.trychroma.com/)
-[![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-red.svg)](https://prometheus.io/)
-[![Grafana](https://img.shields.io/badge/Grafana-Dashboard-orange.svg)](https://grafana.com/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4-412991.svg)](https://openai.com/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://www.docker.com/)
+[![Redis](https://img.shields.io/badge/Redis-7.0-DC382D.svg)](https://redis.io/)
+[![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C.svg)](https://prometheus.io/)
+[![Grafana](https://img.shields.io/badge/Grafana-Dashboard-F46800.svg)](https://grafana.com/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.1+-EE4C2C.svg)](https://pytorch.org/)
+[![Transformers](https://img.shields.io/badge/🤗_Transformers-4.36+-FFD21E.svg)](https://huggingface.co/transformers/)
+[![License](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
 
 ## 🚀 Features
 
@@ -577,15 +583,21 @@ mypy src/
 
 ## 📚 Documentation
 
-| Document | Description |
-|----------|-------------|
-| [README.md](README.md) | Main project documentation (this file) |
-| [CHINESE_SUPPORT.md](docs/CHINESE_SUPPORT.md) | Chinese language features guide |
-| [CHINESE_QUICK_START.md](docs/CHINESE_QUICK_START.md) | Chinese quick start guide |
-| [MONITORING.md](docs/MONITORING.md) | Monitoring setup and metrics guide |
-| [MONITORING_QUICKSTART.md](MONITORING_QUICKSTART.md) | Quick monitoring setup |
-| [PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md) | Production deployment guide |
-| [API Documentation](http://localhost:8080/docs) | Interactive API docs (when server running) |
+### Quick Links
+- **[📖 Documentation Center](docs/README.md)** - Complete documentation index and navigation
+
+### Key Documents
+
+| Category | Document | Description |
+|----------|----------|-------------|
+| **Overview** | [README.md](README.md) | Main project documentation (this file) |
+| | [README_CHINESE.md](README_CHINESE.md) | 中文版專案說明 |
+| **Quick Start** | [Chinese Support Guide](docs/guides/CHINESE_SUPPORT.md) | 中文快速開始與完整指南 |
+| **Deployment** | [Production Deployment](docs/guides/PRODUCTION_DEPLOYMENT.md) | Production deployment guide |
+| | [Monitoring Guide](docs/guides/MONITORING.md) | Complete monitoring setup (with quick start) |
+| **Testing** | [Performance Test Report](docs/testing/RAG_PERFORMANCE_TEST_REPORT.md) | RAG system performance analysis |
+| **Troubleshooting** | [ChromaDB Issues](docs/troubleshooting/TROUBLESHOOTING_CHROMADB.md) | ChromaDB troubleshooting guide |
+| **API** | [API Documentation](http://localhost:8080/docs) | Interactive API docs (when server running) |
 
 ## 🐛 Troubleshooting
 

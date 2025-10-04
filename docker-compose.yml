@@ -245,8 +245,6 @@ services:
     profiles:
       - monitoring
     privileged: true
-    devices:
-      - /dev/kmsg
     logging:
       driver: "json-file"
       options:

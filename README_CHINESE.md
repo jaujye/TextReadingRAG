@@ -106,10 +106,9 @@ pytest tests/test_rag/test_chinese_support.py -v
 
 ### 文檔
 
-- **快速入門**: `docs/CHINESE_QUICK_START.md`
-- **詳細文檔**: `docs/CHINESE_SUPPORT.md`
-- **實現摘要**: `CHINESE_SUPPORT_SUMMARY.md`
-- **示例代碼**: `examples/chinese_example.py`
+- **📖 文檔中心**: [docs/README.md](docs/README.md) - 完整文檔導覽
+- **完整指南**: [docs/guides/CHINESE_SUPPORT.md](docs/guides/CHINESE_SUPPORT.md) - 包含快速開始與詳細說明
+- **示例代碼**: [examples/chinese_example.py](examples/chinese_example.py)
 
 ### 性能
 
@@ -230,10 +229,9 @@ pytest tests/test_rag/test_chinese_support.py -v
 
 ### Documentation
 
-- **Quick Start**: `docs/CHINESE_QUICK_START.md`
-- **Full Documentation**: `docs/CHINESE_SUPPORT.md`
-- **Implementation Summary**: `CHINESE_SUPPORT_SUMMARY.md`
-- **Example Code**: `examples/chinese_example.py`
+- **📖 Documentation Center**: [docs/README.md](docs/README.md) - Complete documentation index
+- **Complete Guide**: [docs/guides/CHINESE_SUPPORT.md](docs/guides/CHINESE_SUPPORT.md) - Quick start + full documentation
+- **Example Code**: [examples/chinese_example.py](examples/chinese_example.py)
 
 ### Performance
 
@@ -288,16 +286,16 @@ pytest tests/test_rag/test_chinese_support.py::TestIntegration -v
 ### Support
 
 For issues or questions:
-1. Check documentation: `docs/CHINESE_SUPPORT.md`
-2. Review test cases: `tests/test_rag/test_chinese_support.py`
+1. Check documentation: [docs/guides/CHINESE_SUPPORT.md](docs/guides/CHINESE_SUPPORT.md)
+2. Review test cases: [tests/test_rag/test_chinese_support.py](tests/test_rag/test_chinese_support.py)
 3. Run examples: `python examples/chinese_example.py`
+4. ChromaDB troubleshooting: [docs/troubleshooting/TROUBLESHOOTING_CHROMADB.md](docs/troubleshooting/TROUBLESHOOTING_CHROMADB.md)
 
 ---
 
 ## 技術支持 / Technical Support
 
-- 📖 完整文檔 / Full Docs: `docs/CHINESE_SUPPORT.md`
-- 🚀 快速開始 / Quick Start: `docs/CHINESE_QUICK_START.md`
-- 📝 實現摘要 / Implementation: `CHINESE_SUPPORT_SUMMARY.md`
-- 💻 示例代碼 / Examples: `examples/chinese_example.py`
-- 🧪 測試 / Tests: `tests/test_rag/test_chinese_support.py`
+- 📖 文檔中心 / Documentation Center: [docs/README.md](docs/README.md)
+- 📖 完整指南 / Complete Guide: [docs/guides/CHINESE_SUPPORT.md](docs/guides/CHINESE_SUPPORT.md)
+- 💻 示例代碼 / Examples: [examples/chinese_example.py](examples/chinese_example.py)
+- 🧪 測試 / Tests: [tests/test_rag/test_chinese_support.py](tests/test_rag/test_chinese_support.py)
