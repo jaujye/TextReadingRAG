@@ -30,7 +30,8 @@ FROM python:3.11-slim as production
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    NLTK_DATA=/usr/local/share/nltk_data
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
@@ -47,6 +48,12 @@ WORKDIR /app
 # Copy Python packages from builder stage
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Download NLTK data
+RUN python -c "import nltk; \
+    nltk.download('wordnet', download_dir='/usr/local/share/nltk_data'); \
+    nltk.download('punkt', download_dir='/usr/local/share/nltk_data'); \
+    nltk.download('averaged_perceptron_tagger', download_dir='/usr/local/share/nltk_data')"
 
 # Copy application code
 COPY src/ ./src/

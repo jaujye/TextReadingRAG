@@ -2,13 +2,13 @@
 
 import asyncio
 import logging
+import os
 import re
 from typing import Dict, List, Optional, Any, Set, Tuple
 from enum import Enum
 from datetime import datetime
 
 import nltk
-from nltk.corpus import wordnet
 from llama_index.llms.openai import OpenAI
 from llama_index.core.llms.llm import LLM
 
@@ -18,21 +18,54 @@ from src.rag.language_utils import detect_language, is_chinese
 
 logger = logging.getLogger(__name__)
 
-# Download NLTK data if not present
-try:
-    nltk.data.find('corpora/wordnet')
-except LookupError:
-    nltk.download('wordnet', quiet=True)
+# Set NLTK data path to a location that's writable or already populated
+# Priority: NLTK_DATA env var > /usr/local/share/nltk_data > /tmp/nltk_data
+if 'NLTK_DATA' in os.environ:
+    nltk_data_paths = [os.environ['NLTK_DATA']]
+else:
+    nltk_data_paths = ['/usr/local/share/nltk_data', '/tmp/nltk_data']
 
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt', quiet=True)
+for path in nltk_data_paths:
+    if path not in nltk.data.path:
+        nltk.data.path.insert(0, path)
 
-try:
-    nltk.data.find('taggers/averaged_perceptron_tagger')
-except LookupError:
-    nltk.download('averaged_perceptron_tagger', quiet=True)
+# Download NLTK data if not present (gracefully handle failures)
+_nltk_resources = {
+    'corpora/wordnet': 'wordnet',
+    'tokenizers/punkt': 'punkt',
+    'taggers/averaged_perceptron_tagger': 'averaged_perceptron_tagger'
+}
+
+_wordnet_available = False
+for resource_path, resource_name in _nltk_resources.items():
+    try:
+        nltk.data.find(resource_path)
+        if resource_name == 'wordnet':
+            _wordnet_available = True
+    except LookupError:
+        try:
+            # Try to download to the first writable path
+            for data_path in nltk_data_paths:
+                try:
+                    os.makedirs(data_path, exist_ok=True)
+                    nltk.download(resource_name, download_dir=data_path, quiet=True)
+                    if resource_name == 'wordnet':
+                        _wordnet_available = True
+                    logger.info(f"Downloaded NLTK resource '{resource_name}' to {data_path}")
+                    break
+                except (PermissionError, OSError) as e:
+                    logger.debug(f"Cannot write to {data_path}: {e}")
+                    continue
+        except Exception as e:
+            logger.warning(f"Failed to download NLTK resource '{resource_name}': {e}")
+
+# Import wordnet only if available
+if _wordnet_available:
+    try:
+        from nltk.corpus import wordnet
+    except Exception as e:
+        logger.warning(f"WordNet installed but cannot import: {e}")
+        _wordnet_available = False
 
 
 class ExpansionMethod(str, Enum):
@@ -48,24 +81,29 @@ class SynonymExpander:
 
     def __init__(self):
         """Initialize synonym expander."""
-        self.pos_tags_map = {
-            'NN': wordnet.NOUN,
-            'NNS': wordnet.NOUN,
-            'NNP': wordnet.NOUN,
-            'NNPS': wordnet.NOUN,
-            'VB': wordnet.VERB,
-            'VBD': wordnet.VERB,
-            'VBG': wordnet.VERB,
-            'VBN': wordnet.VERB,
-            'VBP': wordnet.VERB,
-            'VBZ': wordnet.VERB,
-            'JJ': wordnet.ADJ,
-            'JJR': wordnet.ADJ,
-            'JJS': wordnet.ADJ,
-            'RB': wordnet.ADV,
-            'RBR': wordnet.ADV,
-            'RBS': wordnet.ADV,
-        }
+        self.available = _wordnet_available
+        if self.available:
+            self.pos_tags_map = {
+                'NN': wordnet.NOUN,
+                'NNS': wordnet.NOUN,
+                'NNP': wordnet.NOUN,
+                'NNPS': wordnet.NOUN,
+                'VB': wordnet.VERB,
+                'VBD': wordnet.VERB,
+                'VBG': wordnet.VERB,
+                'VBN': wordnet.VERB,
+                'VBP': wordnet.VERB,
+                'VBZ': wordnet.VERB,
+                'JJ': wordnet.ADJ,
+                'JJR': wordnet.ADJ,
+                'JJS': wordnet.ADJ,
+                'RB': wordnet.ADV,
+                'RBR': wordnet.ADV,
+                'RBS': wordnet.ADV,
+            }
+        else:
+            self.pos_tags_map = {}
+            logger.warning("WordNet not available - synonym expansion disabled")
 
     def expand_query(
         self,
@@ -84,6 +122,11 @@ class SynonymExpander:
         Returns:
             List of expanded queries
         """
+        # Check if WordNet is available
+        if not self.available:
+            logger.warning("WordNet not available - skipping synonym expansion")
+            return []
+
         try:
             # Skip synonym expansion for Chinese queries
             if is_chinese(query):

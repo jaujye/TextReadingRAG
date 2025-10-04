@@ -266,7 +266,7 @@ class ConfigurationResponse(BaseModel):
 
     retrieval_config: Dict[str, Any] = Field(..., description="Retrieval configuration")
     processing_config: Dict[str, Any] = Field(..., description="Processing configuration")
-    model_config: Dict[str, Any] = Field(..., description="Model configuration")
+    llm_config: Dict[str, Any] = Field(..., description="LLM model configuration")
     limits_config: Dict[str, Any] = Field(..., description="Limits and constraints")
     features_enabled: List[str] = Field(..., description="Enabled features")
 
