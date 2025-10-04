@@ -316,7 +316,7 @@
         "gridPos": {"h": 4, "w": 6, "x": 18, "y": 40},
         "targets": [
           {
-            "expr": "up{job=~\"textreadingrag-api|chromadb|redis\"}",
+            "expr": "up{job=~\"textreadingrag-api|redis\"}",
             "legendFormat": "{{job}}",
             "refId": "A"
           }

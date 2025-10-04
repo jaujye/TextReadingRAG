@@ -37,23 +37,18 @@ scrape_configs:
         labels:
           service: 'textreadingrag-api'
           component: 'backend'
-    # For local development (if API runs on host)
-      - targets: ['host.docker.internal:8080']
-        labels:
-          service: 'textreadingrag-api'
-          component: 'backend'
-          environment: 'development'
 
-  # ChromaDB Vector Store
-  - job_name: 'chromadb'
-    scrape_interval: 15s
-    static_configs:
-      - targets: ['chromadb:8000']
-        labels:
-          service: 'chromadb'
-          component: 'vectorstore'
-    # ChromaDB metrics endpoint (if available)
-    metrics_path: '/metrics'
+  # ChromaDB Vector Store (no native metrics endpoint - monitoring via cAdvisor)
+  # Note: ChromaDB 0.4.24 does not expose /metrics endpoint
+  # Container metrics available through cAdvisor
+  # - job_name: 'chromadb'
+  #   scrape_interval: 15s
+  #   static_configs:
+  #     - targets: ['chromadb:8000']
+  #       labels:
+  #         service: 'chromadb'
+  #         component: 'vectorstore'
+  #   metrics_path: '/metrics'
 
   # Redis Exporter
   - job_name: 'redis'
@@ -84,10 +79,11 @@ scrape_configs:
     metrics_path: '/metrics'
 
   # Nginx (if using reverse proxy)
-  - job_name: 'nginx'
-    scrape_interval: 15s
-    static_configs:
-      - targets: ['nginx-exporter:9113']
-        labels:
-          service: 'nginx'
-          component: 'proxy'
+  # Note: nginx-exporter container not running - disabled
+  # - job_name: 'nginx'
+  #   scrape_interval: 15s
+  #   static_configs:
+  #     - targets: ['nginx-exporter:9113']
+  #       labels:
+  #         service: 'nginx'
+  #         component: 'proxy'
